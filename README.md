@@ -3,20 +3,24 @@
 > 一个用于**通过 Steam 启动国服二次元游戏（二游）**的 Windows 命令行小工具。
 > 参考 [Better-Endfield](https://github.com/Dr-hydra/Better-Endfield) 的 Steam 启动思路，但**只做「启动器」、不做任何注入/魔改**。
 
-## 🖥️ 图形化界面（推荐）
+## 🖥️ 图形化界面（原生窗口）
+
+**双击 exe 即可打开**，无需命令行、无需浏览器。也可运行：
 
 ```bash
-steam-gacha-launcher web
+steam-gacha-launcher            # 双击 / 无参数：直接打开图形界面
+steam-gacha-launcher gui        # 同上
+steam-gacha-launcher web        # 以浏览器方式打开（降级方案）
 ```
 
-启动后会自动打开浏览器，进入深色主题的操作页面，无需记命令即可：
+界面为**原生窗口**（基于 Edge WebView2，Windows 10/11 系统自带），深色主题：
 
 - 查看每款游戏的**检测状态**与已定位路径；
 - 一键**直接启动 / 经官方启动器 / 经 Steam 启动**；
 - 一键**加入 / 移除** Steam 库、复制启动 URI；
 - 在线编辑每款游戏的**安装路径、启动参数**，以及默认启动方式、Steam 目录等全局设置并**保存到 config.yaml**。
 
-界面是内嵌在 exe 里的本地单页应用，服务仅监听 `127.0.0.1`，不对外网开放，无需联网。
+> 说明：界面内部仍在本地 `127.0.0.1` 起一个临时服务供页面调用接口，但对用户**完全不可见**——没有浏览器标签页、没有地址栏，双击就是独立窗口。服务不对外网开放，无需联网。
 
 ## 为什么需要它
 
@@ -88,20 +92,23 @@ steam-gacha-launcher scan   # 列出内置游戏并检测本机安装
 ### 从源码构建（Go ≥ 1.22）
 
 ```bash
-go build -trimpath -ldflags "-s -w" -o steam-gacha-launcher.exe .
+# 原生窗口版（需 Windows + CGO，编译器：MinGW-w64 gcc 或 MSVC）
+go build -trimpath -ldflags "-s -w -H windowsgui" -o steam-gacha-launcher.exe .
 ```
+
+`-H windowsgui` 使其成为 GUI 子系统程序：双击运行时无黑色控制台窗口。若只想用命令行/浏览器界面，可 `CGO_ENABLED=0 go build`（此时 `gui` 命令会提示不可用，改用 `web`）。
 
 ### 云端编译（GitHub Actions）
 
-本项目自带 `.github/workflows/build.yml`：推送或打 tag `v*` 即自动在云端构建 Windows amd64/arm64/386 三架构产物，tag 推送还会自动发布 Release。手动触发：仓库 **Actions → build → Run workflow**。
+本项目自带 `.github/workflows/build.yml`：在 `windows-2022` 上原生编译（CGO + WebView2），推送或打 tag `v*` 即自动构建出可双击运行的 `steam-gacha-launcher.exe`，tag 推送还会自动发布 Release。手动触发：仓库 **Actions → build → Run workflow**。
 
 ---
 
 ## 使用示例
 
 ```bash
-# 1. 打开图形化界面（推荐）
-steam-gacha-launcher web
+# 1. 双击 exe 或运行，直接打开原生图形界面
+steam-gacha-launcher
 
 # 2. 查看支持的游戏 + 检测本机安装
 steam-gacha-launcher scan
@@ -181,8 +188,10 @@ games:
 ```
 steam-gacha-launcher/
 ├── main.go                      # CLI 入口
-├── web.go                       # 图形化界面（本地 Web UI + API）
-├── web/index.html               # 内嵌的界面页面
+├── web.go                       # 图形界面后端（本地 HTTP + API）
+├── web/index.html               # 界面页面（内嵌）
+├── gui_native.go                # 原生窗口入口（Windows + CGO，WebView2）
+├── gui_stub.go                  # 非 CGO 构建的降级实现
 ├── internal/
 │   ├── config/                  # 配置加载/生成/保存
 │   ├── games/                   # 游戏画像 + 内置列表
@@ -190,7 +199,7 @@ steam-gacha-launcher/
 │   ├── launch/                  # 进程启动与 URI 打开
 │   └── steam/                   # Steam 目录检测 + shortcuts.vdf 读写
 ├── config.example.yaml
-├── .github/workflows/build.yml  # 云端编译
+├── .github/workflows/build.yml  # 云端编译（windows-2022 + CGO）
 └── LICENSE
 ```
 

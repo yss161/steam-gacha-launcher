@@ -91,7 +91,11 @@ type cli struct {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		printUsage()
+		// 双击运行 / 无参数：直接打开图形界面
+		if err := openNativeGUI(&cli{}); err != nil {
+			fmt.Fprintln(os.Stderr, "启动图形界面失败:", err)
+			printUsage()
+		}
 		return nil
 	}
 	cmd := args[0]
@@ -107,6 +111,9 @@ func run(args []string) error {
 	case "config-init", "init":
 		return cmdConfigInit(c)
 	case "web", "gui":
+		if cmd == "gui" {
+			return openNativeGUI(c)
+		}
 		return cmdWeb(c)
 	case "version", "-v", "--version":
 		fmt.Println(version)
@@ -449,15 +456,17 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
   steam-gacha-launcher <命令> [选项]
 
 命令:
-  list                  列出内置支持的游戏
-  scan                  列出内置游戏并检测本机安装位置
-  web                   打开图形化界面（本地 Web UI）
-  launch <id>           启动游戏（默认 direct 模式）
-  steam-add <id>        将游戏加入 Steam 库（非 Steam 游戏快捷方式）
-  steam-uri <id>        仅输出 steam:// 启动 URI 与 appid
-  remove <id>           从 Steam 库移除该游戏
-  config-init           生成示例配置文件 config.yaml
-  version               显示版本
+  (无参数)              双击运行：直接打开图形界面
+  gui                    打开图形界面（原生窗口）
+  web                    以浏览器方式打开图形界面
+  list                   列出内置支持的游戏
+  scan                   列出内置游戏并检测本机安装位置
+  launch <id>            启动游戏（默认 direct 模式）
+  steam-add <id>         将游戏加入 Steam 库（非 Steam 游戏快捷方式）
+  steam-uri <id>         仅输出 steam:// 启动 URI 与 appid
+  remove <id>            从 Steam 库移除该游戏
+  config-init            生成示例配置文件 config.yaml
+  version                显示版本
 
 选项:
   -config <path>        配置文件路径（默认 exe 旁 config.yaml）
@@ -469,8 +478,8 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
   -force                忽略安全提示（如 Steam 正在运行）
 
 示例:
+  steam-gacha-launcher                      # 双击 / 无参数：直接打开图形界面
   steam-gacha-launcher scan
-  steam-gacha-launcher web                  # 打开图形化界面
   steam-gacha-launcher launch genshin-cn
   steam-gacha-launcher launch genshin-cn -mode launcher
   steam-gacha-launcher launch hsr-cn -mode steam
