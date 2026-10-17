@@ -110,11 +110,8 @@ func run(args []string) error {
 	switch cmd {
 	case "config-init", "init":
 		return cmdConfigInit(c)
-	case "web", "gui":
-		if cmd == "gui" {
-			return openNativeGUI(c)
-		}
-		return cmdWeb(c)
+	case "gui":
+		return openNativeGUI(c)
 	case "version", "-v", "--version":
 		fmt.Println(version)
 		return nil
@@ -457,8 +454,7 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
 
 命令:
   (无参数)              双击运行：直接打开图形界面
-  gui                    打开图形界面（原生窗口）
-  web                    以浏览器方式打开图形界面
+  gui                    打开图形界面（原生 Win32 窗口）
   list                   列出内置支持的游戏
   scan                   列出内置游戏并检测本机安装位置
   launch <id>            启动游戏（默认 direct 模式）

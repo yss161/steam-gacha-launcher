@@ -44,10 +44,10 @@ jobs:
           fi
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
 
-      - name: Build (native GUI, cgo + WebView2)
+      - name: Build (native Win32 GUI, Walk, pure Go)
         shell: bash
         env:
-          CGO_ENABLED: "1"
+          CGO_ENABLED: "0"
         run: |
           go build -trimpath \
             -ldflags "-s -w -H windowsgui -X main.version=${{ steps.version.outputs.ver }}" \

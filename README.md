@@ -3,24 +3,24 @@
 > 一个用于**通过 Steam 启动国服二次元游戏（二游）**的 Windows 命令行小工具。
 > 参考 [Better-Endfield](https://github.com/Dr-hydra/Better-Endfield) 的 Steam 启动思路，但**只做「启动器」、不做任何注入/魔改**。
 
-## 🖥️ 图形化界面（原生窗口）
+## 🖥️ 图形化界面（原生 Win32 程序）
 
 **双击 exe 即可打开**，无需命令行、无需浏览器。也可运行：
 
 ```bash
 steam-gacha-launcher            # 双击 / 无参数：直接打开图形界面
 steam-gacha-launcher gui        # 同上
-steam-gacha-launcher web        # 以浏览器方式打开（降级方案）
 ```
 
-界面为**原生窗口**（基于 Edge WebView2，Windows 10/11 系统自带），深色主题：
+界面为**原生 Win32 窗口**（基于 [Walk](https://github.com/lxn/walk)，使用系统标准控件：列表、按钮、输入框、状态栏、消息框），是真正的桌面程序，不含任何浏览器/网页组件：
 
-- 查看每款游戏的**检测状态**与已定位路径；
+- 用**表格**列出每款游戏的检测状态与已定位路径；
 - 一键**直接启动 / 经官方启动器 / 经 Steam 启动**；
-- 一键**加入 / 移除** Steam 库、复制启动 URI；
-- 在线编辑每款游戏的**安装路径、启动参数**，以及默认启动方式、Steam 目录等全局设置并**保存到 config.yaml**。
+- 一键**加入 / 移除** Steam 库；
+- **双击游戏行**或点「编辑路径/参数」，弹出原生对话框修改安装路径与启动参数；「设置」修改 Steam 目录/账号；全部**保存到 config.yaml**；
+- 「打开配置文件」用记事本打开 config.yaml 进行高级编辑。
 
-> 说明：界面内部仍在本地 `127.0.0.1` 起一个临时服务供页面调用接口，但对用户**完全不可见**——没有浏览器标签页、没有地址栏，双击就是独立窗口。服务不对外网开放，无需联网。
+> 说明：本程序为纯 Go 编译（`CGO_ENABLED=0`），单文件 exe，无任何运行时依赖，不含浏览器引擎。
 
 ## 为什么需要它
 
@@ -89,18 +89,20 @@ steam-gacha-launcher scan   # 列出内置游戏并检测本机安装
 
 在 [Releases](https://github.com/yss161/steam-gacha-launcher/releases) 下载 `steam-gacha-launcher-windows-amd64.exe`。
 
-### 从源码构建（Go ≥ 1.22）
+### 从源码构建（Go ≥ 1.22，纯 Go，无 CGO）
 
 ```bash
-# 原生窗口版（需 Windows + CGO，编译器：MinGW-w64 gcc 或 MSVC）
+# 先由 app.manifest 生成资源（Common Controls 6.0 视觉样式 + DPI 感知）
+go run github.com/akavel/rsrc@latest -manifest app.manifest -o rsrc.syso
+# 编译（-H windowsgui 使其为 GUI 子系统，双击无控制台窗口）
 go build -trimpath -ldflags "-s -w -H windowsgui" -o steam-gacha-launcher.exe .
 ```
 
-`-H windowsgui` 使其成为 GUI 子系统程序：双击运行时无黑色控制台窗口。若只想用命令行/浏览器界面，可 `CGO_ENABLED=0 go build`（此时 `gui` 命令会提示不可用，改用 `web`）。
+> 仓库中已提交 `rsrc.syso`，直接 `go build` 也可；上述命令用于重新生成。
 
 ### 云端编译（GitHub Actions）
 
-本项目自带 `.github/workflows/build.yml`：在 `windows-2022` 上原生编译（CGO + WebView2），推送或打 tag `v*` 即自动构建出可双击运行的 `steam-gacha-launcher.exe`，tag 推送还会自动发布 Release。手动触发：仓库 **Actions → build → Run workflow**。
+本项目自带 `.github/workflows/build.yml`：在 `windows-2022` 上编译（纯 Go，`CGO_ENABLED=0`），推送或打 tag `v*` 即自动构建出可双击运行的 `steam-gacha-launcher.exe`，tag 推送还会自动发布 Release。手动触发：仓库 **Actions → build → Run workflow**。
 
 ---
 
@@ -188,10 +190,10 @@ games:
 ```
 steam-gacha-launcher/
 ├── main.go                      # CLI 入口
-├── web.go                       # 图形界面后端（本地 HTTP + API）
-├── web/index.html               # 界面页面（内嵌）
-├── gui_native.go                # 原生窗口入口（Windows + CGO，WebView2）
-├── gui_stub.go                  # 非 CGO 构建的降级实现
+├── gui_walk.go                  # 原生 Win32 图形界面（Walk）
+├── gui_stub.go                  # 非 Windows 构建的降级实现
+├── app.manifest                 # Common Controls 6.0 视觉样式 + DPI 清单
+├── rsrc.syso                    # 由 app.manifest 生成的资源
 ├── internal/
 │   ├── config/                  # 配置加载/生成/保存
 │   ├── games/                   # 游戏画像 + 内置列表
@@ -199,7 +201,7 @@ steam-gacha-launcher/
 │   ├── launch/                  # 进程启动与 URI 打开
 │   └── steam/                   # Steam 目录检测 + shortcuts.vdf 读写
 ├── config.example.yaml
-├── .github/workflows/build.yml  # 云端编译（windows-2022 + CGO）
+├── .github/workflows/build.yml  # 云端编译（windows-2022，纯 Go）
 └── LICENSE
 ```
 
