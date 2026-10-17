@@ -1,0 +1,34 @@
+# Steam 国服二游启动器 配置文件示例
+# 详细说明见 README.md
+
+# 默认启动方式: direct(直接启动游戏) | launcher(经官方启动器) | steam(经 Steam 快捷方式)
+launch_mode: direct
+
+steam:
+  path: ""          # Steam 安装目录，留空自动检测（注册表 + 常见路径）
+  account_id: ""    # userdata 下的账号目录名，留空自动选择最近使用的账号
+
+games:
+  # —— 覆盖内置游戏（键名 = 内置 id，用 `steam-gacha-launcher list` 查看）——
+  #
+  # 原神：手动指定路径与启动参数
+  # genshin-cn:
+  #   name: "原神"
+  #   path: "D:/Games/Genshin Impact"
+  #   launch_args: ["-platform_type", "CN"]
+  #   tags: ["原神", "二次元"]
+  #
+  # 鸣潮：显式指定主程序与启动器
+  # wuthering-waves-cn:
+  #   path: "D:/Wuthering Waves"
+  #   exe: "Wuthering Waves Game/Client/Binaries/Win64/Client-Win64-Shipping.exe"
+  #   launcher_exe: "launcher.exe"
+  #   launch_args: ["-platform_type", "CN"]
+  #
+  # —— 新增自定义游戏 ——
+  # my-game:
+  #   name: "我的自定义游戏"
+  #   path: "D:/Games/MyGame"
+  #   exe: "MyGame.exe"
+  #   launch_args: ["-cn"]
+  #   launcher_exe: "Launcher.exe"
