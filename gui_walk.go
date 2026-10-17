@@ -49,13 +49,14 @@ func (m *gameModel) Value(row, col int) interface{} {
 
 // guiApp 承载界面状态。
 type guiApp struct {
-	cfg        *config.Config
-	cfgPath    string
-	model      *gameModel
-	mw         *walk.MainWindow
-	tv         *walk.TableView
-	steamLbl   *walk.Label
-	statusItem *walk.StatusBarItem
+	cfg             *config.Config
+	cfgPath         string
+	model           *gameModel
+	mw              *walk.MainWindow
+	tv              *walk.TableView
+	detailLbl       *walk.TextLabel
+	statusItem      *walk.StatusBarItem
+	steamStatusItem *walk.StatusBarItem
 }
 
 // openNativeGUI 打开原生 Win32 图形界面（Walk）。
@@ -73,45 +74,103 @@ func openNativeGUI(c *cli) error {
 	a := &guiApp{cfg: cfg, cfgPath: cfgPath, model: &gameModel{}}
 	a.scan()
 
-	_, err = (MainWindow{
+	err = (MainWindow{
 		AssignTo: &a.mw,
 		Title:    "Steam 国服二游启动器",
-		Size:     Size{Width: 940, Height: 620},
-		MinSize:  Size{Width: 760, Height: 460},
-		Layout:   VBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 8},
-		Children: []Widget{
-			Label{AssignTo: &a.steamLbl, Text: a.steamStatus()},
-			TableView{
-				AssignTo:            &a.tv,
-				AlternatingRowBG:    true,
-				LastColumnStretched: true,
-				Columns: []TableViewColumn{
-					{Title: "游戏", Width: 220},
-					{Title: "状态", Width: 90},
-					{Title: "主程序路径", Width: 520},
-				},
-				Model:           a.model,
-				OnItemActivated: a.onEdit,
+		Size:     Size{Width: 1040, Height: 660},
+		MinSize:  Size{Width: 860, Height: 520},
+		Layout:   VBox{MarginsZero: true},
+
+		MenuItems: []MenuItem{
+			Menu{Text: "文件(&F)", Items: []MenuItem{
+				Action{Text: "重新扫描(&R)", Shortcut: Shortcut{Modifiers: walk.ModControl, Key: walk.KeyR}, OnTriggered: a.onRescan},
+				Action{Text: "打开配置文件(&C)", OnTriggered: a.onOpenConfig},
+				Separator{},
+				Action{Text: "退出(&X)", OnTriggered: func() { a.mw.Close() }},
+			}},
+			Menu{Text: "帮助(&H)", Items: []MenuItem{
+				Action{Text: "关于(&A)", OnTriggered: a.onAbout},
+			}},
+		},
+
+		ToolBar: ToolBar{
+			ButtonStyle: ToolBarButtonTextOnly,
+			Items: []MenuItem{
+				Action{Text: "直接启动", OnTriggered: func() { a.launch("direct") }},
+				Action{Text: "经启动器", OnTriggered: func() { a.launch("launcher") }},
+				Action{Text: "经 Steam", OnTriggered: func() { a.launch("steam") }},
+				Separator{},
+				Action{Text: "加入 Steam", OnTriggered: a.onAdd},
+				Action{Text: "移除", OnTriggered: a.onRemove},
 			},
-			Composite{Layout: HBox{Spacing: 8}, Children: []Widget{
-				PushButton{Text: "直接启动", OnClicked: func() { a.launch("direct") }},
-				PushButton{Text: "经官方启动器", OnClicked: func() { a.launch("launcher") }},
-				PushButton{Text: "经 Steam 启动", OnClicked: func() { a.launch("steam") }},
-			}},
-			Composite{Layout: HBox{Spacing: 8}, Children: []Widget{
-				PushButton{Text: "编辑路径/参数", OnClicked: a.onEdit},
-				PushButton{Text: "加入 Steam 库", OnClicked: a.onAdd},
-				PushButton{Text: "移除", OnClicked: a.onRemove},
-				PushButton{Text: "重新扫描", OnClicked: a.onRescan},
-				PushButton{Text: "设置", OnClicked: a.onSettings},
-				PushButton{Text: "打开配置文件", OnClicked: a.onOpenConfig},
-			}},
 		},
+
+		Children: []Widget{
+			HSplitter{
+				HandleWidth: 6,
+				Children: []Widget{
+					TableView{
+						AssignTo:            &a.tv,
+						AlternatingRowBG:    true,
+						LastColumnStretched: true,
+						ColumnsOrderable:    true,
+						Columns: []TableViewColumn{
+							{Title: "游戏", Width: 200},
+							{Title: "状态", Width: 80},
+							{Title: "主程序路径", Width: 440},
+						},
+						Model:                 a.model,
+						OnCurrentIndexChanged: a.onSelChanged,
+						OnItemActivated:       a.onEdit,
+						StyleCell:             a.styleCell,
+						ContextMenuItems: []MenuItem{
+							Action{Text: "直接启动", OnTriggered: func() { a.launch("direct") }},
+							Action{Text: "经官方启动器", OnTriggered: func() { a.launch("launcher") }},
+							Action{Text: "经 Steam 启动", OnTriggered: func() { a.launch("steam") }},
+							Separator{},
+							Action{Text: "加入 Steam 库", OnTriggered: a.onAdd},
+							Action{Text: "移除", OnTriggered: a.onRemove},
+							Separator{},
+							Action{Text: "编辑路径/参数", OnTriggered: a.onEdit},
+						},
+					},
+					GroupBox{
+						Title:   "详情",
+						MinSize: Size{Width: 300},
+						Layout:  VBox{Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 8},
+						Children: []Widget{
+							TextLabel{AssignTo: &a.detailLbl, Text: "", MinSize: Size{Width: 260}},
+							VSpacer{},
+							PushButton{Text: "编辑路径/参数", OnClicked: a.onEdit},
+							PushButton{Text: "设置", OnClicked: a.onSettings},
+							PushButton{Text: "重新扫描", OnClicked: a.onRescan},
+							PushButton{Text: "打开配置文件", OnClicked: a.onOpenConfig},
+						},
+					},
+				},
+			},
+		},
+
 		StatusBarItems: []StatusBarItem{
-			{AssignTo: &a.statusItem, Text: "就绪（双击游戏行可编辑路径/参数）"},
+			{AssignTo: &a.statusItem, Text: "就绪"},
+			{AssignTo: &a.steamStatusItem, Text: a.steamStatus()},
 		},
-	}).Run()
-	return err
+	}).Create()
+	if err != nil {
+		return err
+	}
+
+	// 后置初始化：状态栏第一项伸缩（Steam 信息右对齐）、默认选中首行。
+	if a.statusItem != nil {
+		_ = a.statusItem.SetWidth(-1)
+	}
+	if len(a.model.rows) > 0 {
+		_ = a.tv.SetCurrentIndex(0)
+	}
+	a.refreshDetail()
+
+	a.mw.Run()
+	return nil
 }
 
 // scan 重新检测游戏并刷新列表。
@@ -154,13 +213,13 @@ func (a *guiApp) buildRow(id string) gameRow {
 func (a *guiApp) steamStatus() string {
 	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
 	if err != nil {
-		return "Steam：未找到（可在「设置」中指定路径）"
+		return "Steam：未找到（可在「设置」中指定）"
 	}
 	s := "Steam：" + sp
 	if steam.IsSteamRunning() {
-		s += "　·　运行中"
+		s += " · 运行中"
 	} else {
-		s += "　·　未运行"
+		s += " · 未运行"
 	}
 	return s
 }
@@ -173,7 +232,7 @@ func (a *guiApp) setStatus(s string) {
 
 func (a *guiApp) err(title string, err error) {
 	a.setStatus(title + "：" + err.Error())
-	walk.MsgBox(nil, title, err.Error(), walk.MsgBoxIconError)
+	walk.MsgBox(a.mw, title, err.Error(), walk.MsgBoxIconError)
 }
 
 func (a *guiApp) selected() (string, *gameSpec, bool) {
@@ -189,6 +248,55 @@ func (a *guiApp) selected() (string, *gameSpec, bool) {
 		return id, nil, false
 	}
 	return id, spec, true
+}
+
+// styleCell 为表格单元格着色（状态列：已定位=绿，未检测到=灰）。
+func (a *guiApp) styleCell(style *walk.CellStyle) {
+	if style.Col() != 1 {
+		return
+	}
+	row := style.Row()
+	if row < 0 || row >= len(a.model.rows) {
+		return
+	}
+	if a.model.rows[row].status == "已定位" {
+		style.TextColor = walk.RGB(0, 140, 0)
+	} else {
+		style.TextColor = walk.RGB(150, 150, 150)
+	}
+}
+
+// detailText 生成当前选中游戏的详情文本。
+func (a *guiApp) detailText() string {
+	idx := a.tv.CurrentIndex()
+	if idx < 0 || idx >= len(a.model.rows) {
+		return "未选择游戏\n\n在左侧列表中选择一款游戏，或双击行编辑路径/参数。"
+	}
+	r := a.model.rows[idx]
+	gc := a.cfg.Games[r.id]
+	var b strings.Builder
+	fmt.Fprintf(&b, "名称：%s\n", r.name)
+	fmt.Fprintf(&b, "状态：%s\n", r.status)
+	if r.path != "" {
+		fmt.Fprintf(&b, "路径：%s\n", r.path)
+	}
+	if len(gc.LaunchArgs) > 0 {
+		fmt.Fprintf(&b, "参数：%s\n", strings.Join(gc.LaunchArgs, " "))
+	}
+	if p := games.ByName(r.id); p != nil && p.LauncherExe != "" {
+		fmt.Fprintf(&b, "启动器：%s\n", p.LauncherExe)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (a *guiApp) refreshDetail() {
+	if a.detailLbl != nil {
+		_ = a.detailLbl.SetText(a.detailText())
+	}
+}
+
+func (a *guiApp) onSelChanged() {
+	a.refreshDetail()
 }
 
 func (a *guiApp) launch(mode string) {
@@ -237,7 +345,7 @@ func (a *guiApp) onAdd() {
 	}
 	force := false
 	if steam.IsSteamRunning() {
-		if walk.MsgBox(nil, "Steam 正在运行",
+		if walk.MsgBox(a.mw, "Steam 正在运行",
 			"Steam 正在运行，直接写入会在退出时被覆盖。\n是否强制写入？",
 			walk.MsgBoxYesNo|walk.MsgBoxIconWarning) != walk.DlgCmdYes {
 			return
@@ -252,7 +360,7 @@ func (a *guiApp) onAdd() {
 	msg := fmt.Sprintf("AppId：%d\nURI：%s\n\n请重启 Steam 后在库中找到「%s」。",
 		uint32(appID), steam.LaunchURI(appID), spec.Name)
 	a.setStatus("已加入 Steam 库：" + spec.Name)
-	walk.MsgBox(nil, "已加入 Steam 库", msg, walk.MsgBoxIconInformation)
+	walk.MsgBox(a.mw, "已加入 Steam 库", msg, walk.MsgBoxIconInformation)
 }
 
 func (a *guiApp) onRemove() {
@@ -261,7 +369,7 @@ func (a *guiApp) onRemove() {
 		return
 	}
 	if steam.IsSteamRunning() {
-		if walk.MsgBox(nil, "Steam 正在运行",
+		if walk.MsgBox(a.mw, "Steam 正在运行",
 			"请先完全退出 Steam 再移除，否则可能被覆盖。\n是否仍要尝试移除？",
 			walk.MsgBoxYesNo|walk.MsgBoxIconWarning) != walk.DlgCmdYes {
 			return
@@ -304,7 +412,7 @@ func (a *guiApp) onEdit() {
 	result, err := (Dialog{
 		AssignTo: &dlg,
 		Title:    "编辑「" + a.model.rows[idx].name + "」",
-		MinSize:  Size{Width: 460},
+		MinSize:  Size{Width: 480},
 		Layout:   VBox{Spacing: 8, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}},
 		Children: []Widget{
 			Label{Text: "安装路径（留空 = 自动检测）："},
@@ -344,6 +452,7 @@ func (a *guiApp) onEdit() {
 		return
 	}
 	a.scan()
+	a.refreshDetail()
 	a.setStatus("已保存配置")
 }
 
@@ -354,7 +463,7 @@ func (a *guiApp) onSettings() {
 	result, err := (Dialog{
 		AssignTo: &dlg,
 		Title:    "设置",
-		MinSize:  Size{Width: 480},
+		MinSize:  Size{Width: 500},
 		Layout:   VBox{Spacing: 8, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}},
 		Children: []Widget{
 			Label{Text: "Steam 安装目录（留空自动检测）："},
@@ -382,17 +491,18 @@ func (a *guiApp) onSettings() {
 		a.err("保存失败", err)
 		return
 	}
-	if a.steamLbl != nil {
-		_ = a.steamLbl.SetText(a.steamStatus())
+	if a.steamStatusItem != nil {
+		_ = a.steamStatusItem.SetText(a.steamStatus())
 	}
 	a.setStatus("设置已保存")
 }
 
 func (a *guiApp) onRescan() {
 	a.scan()
-	if a.steamLbl != nil {
-		_ = a.steamLbl.SetText(a.steamStatus())
+	if a.steamStatusItem != nil {
+		_ = a.steamStatusItem.SetText(a.steamStatus())
 	}
+	a.refreshDetail()
 	a.setStatus("已重新扫描")
 }
 
@@ -408,4 +518,8 @@ func (a *guiApp) onOpenConfig() {
 		return
 	}
 	a.setStatus("已用记事本打开配置文件：" + a.cfgPath)
+}
+
+func (a *guiApp) onAbout() {
+	walk.MsgBox(a.mw, "关于", "Steam 国服二游启动器\n\n通过 Steam 启动国服二次元游戏的工具。\n版本："+version+"\n\n仓库：https://github.com/yss161/steam-gacha-launcher", walk.MsgBoxIconInformation)
 }
