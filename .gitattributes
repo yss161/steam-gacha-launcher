@@ -1,0 +1,10 @@
+# 统一行尾为 LF，避免 Actions 中 shell 脚本受 CRLF 影响
+* text=auto
+
+*.go    text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
