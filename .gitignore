@@ -13,3 +13,6 @@ config.yml
 Thumbs.db
 .idea/
 .vscode/
+
+# 工作区内部数据（不纳入版本库）
+.workbuddy/
