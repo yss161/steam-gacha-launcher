@@ -106,6 +106,8 @@ func run(args []string) error {
 	switch cmd {
 	case "config-init", "init":
 		return cmdConfigInit(c)
+	case "web", "gui":
+		return cmdWeb(c)
 	case "version", "-v", "--version":
 		fmt.Println(version)
 		return nil
@@ -449,6 +451,7 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
 命令:
   list                  列出内置支持的游戏
   scan                  列出内置游戏并检测本机安装位置
+  web                   打开图形化界面（本地 Web UI）
   launch <id>           启动游戏（默认 direct 模式）
   steam-add <id>        将游戏加入 Steam 库（非 Steam 游戏快捷方式）
   steam-uri <id>        仅输出 steam:// 启动 URI 与 appid
@@ -467,6 +470,7 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
 
 示例:
   steam-gacha-launcher scan
+  steam-gacha-launcher web                  # 打开图形化界面
   steam-gacha-launcher launch genshin-cn
   steam-gacha-launcher launch genshin-cn -mode launcher
   steam-gacha-launcher launch hsr-cn -mode steam

@@ -3,6 +3,21 @@
 > 一个用于**通过 Steam 启动国服二次元游戏（二游）**的 Windows 命令行小工具。
 > 参考 [Better-Endfield](https://github.com/Dr-hydra/Better-Endfield) 的 Steam 启动思路，但**只做「启动器」、不做任何注入/魔改**。
 
+## 🖥️ 图形化界面（推荐）
+
+```bash
+steam-gacha-launcher web
+```
+
+启动后会自动打开浏览器，进入深色主题的操作页面，无需记命令即可：
+
+- 查看每款游戏的**检测状态**与已定位路径；
+- 一键**直接启动 / 经官方启动器 / 经 Steam 启动**；
+- 一键**加入 / 移除** Steam 库、复制启动 URI；
+- 在线编辑每款游戏的**安装路径、启动参数**，以及默认启动方式、Steam 目录等全局设置并**保存到 config.yaml**。
+
+界面是内嵌在 exe 里的本地单页应用，服务仅监听 `127.0.0.1`，不对外网开放，无需联网。
+
 ## 为什么需要它
 
 国服二游（原神、星穹铁道、绝区零、鸣潮、终末地等）通常只能从各自的官方启动器启动，无法直接享受 Steam 的能力：
@@ -85,10 +100,13 @@ go build -trimpath -ldflags "-s -w" -o steam-gacha-launcher.exe .
 ## 使用示例
 
 ```bash
-# 1. 查看支持的游戏 + 检测本机安装
+# 1. 打开图形化界面（推荐）
+steam-gacha-launcher web
+
+# 2. 查看支持的游戏 + 检测本机安装
 steam-gacha-launcher scan
 
-# 2. 直接启动（不经过 Steam，无覆盖层）
+# 3. 直接启动（不经过 Steam，无覆盖层）
 steam-gacha-launcher launch genshin-cn
 
 # 3. 经官方启动器启动（需要启动器令牌的游戏）
@@ -163,8 +181,10 @@ games:
 ```
 steam-gacha-launcher/
 ├── main.go                      # CLI 入口
+├── web.go                       # 图形化界面（本地 Web UI + API）
+├── web/index.html               # 内嵌的界面页面
 ├── internal/
-│   ├── config/                  # 配置加载/生成
+│   ├── config/                  # 配置加载/生成/保存
 │   ├── games/                   # 游戏画像 + 内置列表
 │   ├── detect/                  # 注册表/目录/搜索定位
 │   ├── launch/                  # 进程启动与 URI 打开

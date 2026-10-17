@@ -86,6 +86,18 @@ func SaveDefault(path string) error {
 	return os.WriteFile(path, []byte(ExampleYAML), 0o644)
 }
 
+// Save 将配置序列化为 YAML 并写入 path。
+func Save(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("序列化配置失败: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("写入配置失败: %w", err)
+	}
+	return nil
+}
+
 // ExampleYAML 为示例配置模板。
 const ExampleYAML = `# Steam 国服二游启动器 配置文件
 # 说明见 README.md
