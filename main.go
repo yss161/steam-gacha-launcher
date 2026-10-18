@@ -30,7 +30,7 @@ func main() {
 	}
 }
 
-// parseArgs 解析命令行参数，支持「位置参数与选项穿插」的写法（如 launch genshin-cn -path ...）。
+// parseArgs 解析命令行参数，支持「位置参数与选项穿插」的写法（如 launch yi-huan -path ...）。
 func parseArgs(args []string) (*cli, []string, error) {
 	c := &cli{}
 	var pos []string
@@ -564,9 +564,9 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
 示例:
   steam-gacha-launcher                      # 双击 / 无参数：直接打开图形界面
   steam-gacha-launcher scan
-  steam-gacha-launcher launch genshin-cn
-  steam-gacha-launcher launch genshin-cn -mode launcher
-  steam-gacha-launcher launch hsr-cn -mode steam
+  steam-gacha-launcher launch yi-huan
+  steam-gacha-launcher launch yi-huan -mode launcher
+  steam-gacha-launcher launch zzz-cn -mode steam
   steam-gacha-launcher steam-add zzz-cn
-  steam-gacha-launcher launch genshin-cn -path "D:/Games/Genshin Impact" -args "-platform_type CN"
+  steam-gacha-launcher launch yi-huan -path "D:/NTE" -args "-platform_type CN"
 `

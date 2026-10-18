@@ -11,12 +11,12 @@ steam:
 games:
   # —— 覆盖内置游戏（键名 = 内置 id，用 `steam-gacha-launcher list` 查看）——
   #
-  # 原神：手动指定路径与启动参数
-  # genshin-cn:
-  #   name: "原神"
-  #   path: "D:/Games/Genshin Impact"
+  # 异环：手动指定路径与启动参数
+  # yi-huan:
+  #   name: "异环"
+  #   path: "D:/NTE"
   #   launch_args: ["-platform_type", "CN"]
-  #   tags: ["原神", "二次元"]
+  #   tags: ["异环", "二次元"]
   #
   # 鸣潮：显式指定主程序与启动器
   # wuthering-waves-cn:

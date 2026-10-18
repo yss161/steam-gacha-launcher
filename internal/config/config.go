@@ -117,11 +117,11 @@ games:
   # 可覆盖内置游戏（键名与内置 id 一致），也可新增自定义游戏。
   # 内置 id 见: steam-gacha-launcher list
   #
-  # 覆盖示例（原神，手动指定路径与参数）:
-  # genshin-cn:
-  #   path: "D:/Games/Genshin Impact"
+  # 覆盖示例（异环，手动指定路径与参数）:
+  # yi-huan:
+  #   path: "D:/NTE"
   #   launch_args: ["-platform_type", "CN"]
-  #   tags: ["原神", "二次元"]
+  #   tags: ["异环", "二次元"]
   #
   # 自定义游戏示例:
   # my-game:

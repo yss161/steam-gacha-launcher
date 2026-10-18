@@ -3,7 +3,7 @@ package games
 // init 注册内置游戏画像。
 //
 // 说明：国服（CN）客户端与海外客户端往往共用同一主程序名，区别在于：
-//   - 主程序本身即为 CN 版（如原神国服 YuanShen.exe）；
+//   - 主程序本身即为 CN 版；
 //   - 或需要平台参数（如 -platform_type CN）由启动器/命令行区分大区。
 //
 // 这里的 DefaultArgs 均保持保守（多数国服客户端无需额外参数即可正常启动与登录），
@@ -11,41 +11,31 @@ package games
 // 直接拉起主程序后由游戏自身弹出登录界面。
 func init() {
 	register(&Profile{
-		ID:   "genshin-cn",
-		Name: "原神 (Genshin Impact 国服)",
+		ID:   "yi-huan",
+		Name: "异环 (Neverness to Everness 国服)",
 		DefaultPaths: []string{
-			`C:\Program Files\Genshin Impact`,
-			`C:\Program Files (x86)\Genshin Impact`,
-			`D:\Genshin Impact`,
+			`C:\Program Files\Neverness to Everness`,
+			`C:\Program Files (x86)\Neverness to Everness`,
+			`D:\Neverness to Everness`,
+			`C:\Perfect World\Neverness to Everness`,
+			`C:\Program Files\NTE`,
+			`D:\NTE`,
 		},
+		// 虚幻引擎客户端：常见主程序名（含递归搜索兜底）
 		ExeNames: []string{
-			`Genshin Impact Game\YuanShen.exe`,
-			`YuanShen.exe`,
+			`NTE.exe`,
+			`NTE\Binaries\Win64\NTE-Win64-Shipping.exe`,
+			`Neverness to Everness.exe`,
+			`NTE-Win64-Shipping.exe`,
+			`Client-Win64-Shipping.exe`,
 		},
 		LauncherExe: `launcher.exe`,
-		Tags:        []string{"原神", "HoYoverse"},
+		Tags:        []string{"异环", "完美世界"},
 		RegHints: []RegHint{
-			{Root: "HKLM", Match: []string{"原神", "Genshin Impact"}, Value: "InstallLocation"},
+			{Root: "HKLM", Match: []string{"异环", "Neverness to Everness", "NTE"}, Value: "InstallLocation"},
 		},
-	})
-
-	register(&Profile{
-		ID:   "hsr-cn",
-		Name: "崩坏：星穹铁道 (Honkai: Star Rail 国服)",
-		DefaultPaths: []string{
-			`C:\Program Files\Star Rail`,
-			`C:\Program Files (x86)\Star Rail`,
-			`D:\Star Rail`,
-		},
-		ExeNames: []string{
-			`Games\StarRail.exe`,
-			`StarRail.exe`,
-		},
-		LauncherExe: `launcher.exe`,
-		Tags:        []string{"星穹铁道", "HoYoverse"},
-		RegHints: []RegHint{
-			{Root: "HKLM", Match: []string{"崩坏", "星穹铁道", "Star Rail"}, Value: "InstallLocation"},
-		},
+		SteamAppID:      "4508340",
+		SteamInstallDir: "Neverness to Everness",
 	})
 
 	register(&Profile{
