@@ -24,6 +24,9 @@ type Profile struct {
 	LauncherArgs []string
 	Tags         []string
 	RegHints     []RegHint
+	// 假入库（Steam 库显示为已安装）相关
+	SteamAppID      string // 该游戏在 Steam 的真实 appid（无 Steam 版本则为空）
+	SteamInstallDir string // steamapps/common 下的目录名
 }
 
 var builtin []*Profile

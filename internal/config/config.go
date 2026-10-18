@@ -28,6 +28,10 @@ type GameConfig struct {
 	WorkDir      string   `yaml:"work_dir"`      // 工作目录，留空 = 主程序所在目录
 	Tags         []string `yaml:"tags"`          // Steam 分类标签
 	Icon         string   `yaml:"icon"`          // Steam 图标路径（.ico/.exe），留空用主程序
+
+	// 假入库（让游戏在 Steam 库中显示为已安装）
+	SteamAppID      string `yaml:"steam_appid"`       // 该游戏的 Steam appid
+	SteamInstallDir string `yaml:"steam_installdir"`  // steamapps/common 下的目录名
 }
 
 // Config 为顶层配置结构。

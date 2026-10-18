@@ -141,6 +141,9 @@ func openNativeGUI(c *cli) error {
 						Children: []Widget{
 							TextLabel{AssignTo: &a.detailLbl, Text: "", MinSize: Size{Width: 260}},
 							VSpacer{},
+							PushButton{Text: "启动国服（经 Steam 库）", OnClicked: a.onLaunchSteamApp},
+							PushButton{Text: "假入库（显示为已安装）", OnClicked: a.onInstall},
+							PushButton{Text: "取消假入库", OnClicked: a.onUninstall},
 							PushButton{Text: "编辑路径/参数", OnClicked: a.onEdit},
 							PushButton{Text: "设置", OnClicked: a.onSettings},
 							PushButton{Text: "重新扫描", OnClicked: a.onRescan},
@@ -286,7 +289,133 @@ func (a *guiApp) detailText() string {
 	if p := games.ByName(r.id); p != nil && p.LauncherExe != "" {
 		fmt.Fprintf(&b, "启动器：%s\n", p.LauncherExe)
 	}
+	// Steam 假入库状态
+	if appID := a.appIDOf(r.id); appID != "" {
+		st := "未入库"
+		if sp, err := steam.FindSteamPath(a.cfg.Steam.Path); err == nil && steam.IsFakeInstalled(sp, appID) {
+			st = "已入库（Steam 库显示为已安装）"
+		}
+		fmt.Fprintf(&b, "Steam 库：%s（AppId %s）\n", st, appID)
+	} else {
+		fmt.Fprintf(&b, "Steam 库：无对应 Steam 版本\n")
+	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// appIDOf 返回游戏的 Steam appid（配置覆盖优先于内置）。
+func (a *guiApp) appIDOf(id string) string {
+	if gc, ok := a.cfg.Games[id]; ok && gc.SteamAppID != "" {
+		return gc.SteamAppID
+	}
+	if p := games.ByName(id); p != nil {
+		return p.SteamAppID
+	}
+	return ""
+}
+
+// onLaunchSteamApp 通过 Steam 库启动国服（steam://rungameid/<appid>，需已假入库）。
+func (a *guiApp) onLaunchSteamApp() {
+	_, spec, ok := a.selected()
+	if !ok {
+		return
+	}
+	if spec.SteamAppID == "" {
+		walk.MsgBox(a.mw, "无法启动", "该游戏无对应 Steam 版本（未提供 appid），无法经 Steam 库启动。\n可改用「直接启动」或「经 Steam（快捷方式）」。", walk.MsgBoxIconWarning)
+		return
+	}
+	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
+	if err != nil {
+		a.err("启动失败", err)
+		return
+	}
+	if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
+		if walk.MsgBox(a.mw, "尚未假入库",
+			"该游戏尚未在 Steam 库中显示为已安装。\n是否现在「假入库」？",
+			walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
+			return
+		}
+		a.onInstall()
+		if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
+			return
+		}
+	}
+	uri := "steam://rungameid/" + spec.SteamAppID
+	if err := launch.OpenURI(uri); err != nil {
+		a.err("启动失败", err)
+		return
+	}
+	a.setStatus("已通过 Steam 库启动：" + spec.Name)
+}
+
+// onInstall 假入库：让游戏在 Steam 库中显示为已安装。
+func (a *guiApp) onInstall() {
+	_, spec, ok := a.selected()
+	if !ok {
+		return
+	}
+	if spec.SteamAppID == "" {
+		walk.MsgBox(a.mw, "无法假入库",
+			"游戏「"+spec.Name+"」未提供 Steam appid（需在 Steam 有对应版本）。\n可在 config.yaml 中设置 steam_appid。",
+			walk.MsgBoxIconWarning)
+		return
+	}
+	if steam.IsSteamRunning() {
+		if walk.MsgBox(a.mw, "Steam 正在运行",
+			"假入库后需完全重启 Steam，库才会刷新显示。\n是否继续？",
+			walk.MsgBoxYesNo|walk.MsgBoxIconWarning) != walk.DlgCmdYes {
+			return
+		}
+	}
+	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
+	if err != nil {
+		a.err("假入库失败", err)
+		return
+	}
+	installdir := steamInstallDirOf(spec)
+	linkDir, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, spec.WorkDir)
+	if err != nil {
+		a.err("假入库失败", err)
+		return
+	}
+	a.refreshDetail()
+	a.setStatus("已假入库：" + spec.Name)
+	walk.MsgBox(a.mw, "假入库完成",
+		fmt.Sprintf("AppId：%s\n库内目录：%s\n联接至：%s\n\n请重启 Steam，「%s」将显示为已安装，可从库中启动国服。",
+			spec.SteamAppID, linkDir, spec.WorkDir, spec.Name),
+		walk.MsgBoxIconInformation)
+}
+
+// onUninstall 取消假入库（不影响游戏文件）。
+func (a *guiApp) onUninstall() {
+	_, spec, ok := a.selected()
+	if !ok {
+		return
+	}
+	if spec.SteamAppID == "" {
+		a.setStatus("该游戏未提供 Steam appid")
+		return
+	}
+	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
+	if err != nil {
+		a.err("取消失败", err)
+		return
+	}
+	if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
+		a.setStatus("该游戏未假入库")
+		return
+	}
+	if walk.MsgBox(a.mw, "取消假入库",
+		"将删除 Steam 库中的安装记录与目录联接（不影响游戏文件）。\n继续？",
+		walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
+		return
+	}
+	installdir := steamInstallDirOf(spec)
+	if err := steam.RemoveFakeInstall(sp, spec.SteamAppID, installdir); err != nil {
+		a.err("取消失败", err)
+		return
+	}
+	a.refreshDetail()
+	a.setStatus("已取消假入库：" + spec.Name)
 }
 
 func (a *guiApp) refreshDetail() {

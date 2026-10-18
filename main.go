@@ -148,6 +148,16 @@ func run(args []string) error {
 			return fmt.Errorf("用法: remove <游戏id>")
 		}
 		return cmdRemove(cfg, c, pos[0])
+	case "install":
+		if len(pos) < 1 {
+			return fmt.Errorf("用法: install <游戏id>")
+		}
+		return cmdInstall(cfg, c, pos[0])
+	case "uninstall":
+		if len(pos) < 1 {
+			return fmt.Errorf("用法: uninstall <游戏id>")
+		}
+		return cmdUninstall(cfg, c, pos[0])
 	default:
 		return fmt.Errorf("未知命令 %q\n\n%s", cmd, usageText)
 	}
@@ -155,16 +165,18 @@ func run(args []string) error {
 
 // gameSpec 为解析后的「待启动游戏」描述。
 type gameSpec struct {
-	ID           string
-	Name         string
-	ExePath      string
-	WorkDir      string
-	RootDir      string
-	LauncherExe  string
-	Args         []string
-	LauncherArgs []string
-	Tags         []string
-	Icon         string
+	ID              string
+	Name            string
+	ExePath         string
+	WorkDir         string
+	RootDir         string
+	LauncherExe     string
+	Args            []string
+	LauncherArgs    []string
+	Tags            []string
+	Icon            string
+	SteamAppID      string
+	SteamInstallDir string
 }
 
 func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
@@ -181,6 +193,8 @@ func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
 		spec.Args = append([]string{}, p.DefaultArgs...)
 		spec.LauncherArgs = append([]string{}, p.LauncherArgs...)
 		spec.Tags = append([]string{}, p.Tags...)
+		spec.SteamAppID = p.SteamAppID
+		spec.SteamInstallDir = p.SteamInstallDir
 	}
 	if hasCfg {
 		if gc.Name != "" {
@@ -200,6 +214,12 @@ func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
 		}
 		if gc.Icon != "" {
 			spec.Icon = gc.Icon
+		}
+		if gc.SteamAppID != "" {
+			spec.SteamAppID = gc.SteamAppID
+		}
+		if gc.SteamInstallDir != "" {
+			spec.SteamInstallDir = gc.SteamInstallDir
 		}
 	}
 
@@ -402,6 +422,72 @@ func cmdConfigInit(c *cli) error {
 	return nil
 }
 
+// steamInstallDirOf 返回假入库用的库内目录名（未配置时用游戏根目录名兜底）。
+func steamInstallDirOf(spec *gameSpec) string {
+	if spec.SteamInstallDir != "" {
+		return spec.SteamInstallDir
+	}
+	d := filepath.Base(spec.RootDir)
+	if d == "" || d == "." || d == "\\" || d == "/" {
+		d = strings.TrimSuffix(strings.TrimSuffix(filepath.Base(spec.ExePath), ".exe"), ".EXE")
+	}
+	if d == "" || d == "." || d == "\\" || d == "/" {
+		d = strings.ReplaceAll(spec.Name, " ", "")
+	}
+	return d
+}
+
+// cmdInstall 假入库：让游戏在 Steam 库中显示为已安装（伪造 appmanifest + 目录联接）。
+func cmdInstall(cfg *config.Config, c *cli, id string) error {
+	spec, err := resolveSpec(cfg, c, id)
+	if err != nil {
+		return err
+	}
+	if spec.SteamAppID == "" {
+		return fmt.Errorf("游戏「%s」未提供 Steam appid（需在 Steam 有对应版本）。可在 config.yaml 为该游戏设置 steam_appid", spec.Name)
+	}
+	steamPath, err := steam.FindSteamPath(cfg.Steam.Path)
+	if err != nil {
+		return err
+	}
+	if steam.IsSteamRunning() && !c.force {
+		fmt.Println("提示：Steam 正在运行。假入库后需完全重启 Steam，库才会刷新显示。")
+	}
+	installdir := steamInstallDirOf(spec)
+	linkDir, err := steam.FakeInstall(steamPath, spec.SteamAppID, spec.Name, installdir, spec.WorkDir)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("✅ 假入库完成\n")
+	fmt.Printf("  AppId:      %s\n", spec.SteamAppID)
+	fmt.Printf("  库内目录:    %s\n", linkDir)
+	fmt.Printf("  联接至(国服): %s\n", spec.WorkDir)
+	fmt.Println("\n请重启 Steam，「" + spec.Name + "」将显示为已安装，可从库中启动国服（有真实 Steam 版本时）。")
+	fmt.Printf("经 Steam 启动: steam://rungameid/%s\n", spec.SteamAppID)
+	return nil
+}
+
+// cmdUninstall 取消假入库（删除 appmanifest 与 junction，不影响游戏文件）。
+func cmdUninstall(cfg *config.Config, c *cli, id string) error {
+	spec, err := resolveSpec(cfg, c, id)
+	if err != nil {
+		return err
+	}
+	if spec.SteamAppID == "" {
+		return fmt.Errorf("游戏「%s」未提供 Steam appid", spec.Name)
+	}
+	steamPath, err := steam.FindSteamPath(cfg.Steam.Path)
+	if err != nil {
+		return err
+	}
+	installdir := steamInstallDirOf(spec)
+	if err := steam.RemoveFakeInstall(steamPath, spec.SteamAppID, installdir); err != nil {
+		return err
+	}
+	fmt.Println("✅ 已取消假入库，请重启 Steam 生效。")
+	return nil
+}
+
 func resolveLauncher(spec *gameSpec) (string, error) {
 	if spec.LauncherExe == "" {
 		return "", fmt.Errorf("该游戏未配置官方启动器（launcher_exe），无法使用 launcher 模式")
@@ -459,6 +545,8 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
   scan                   列出内置游戏并检测本机安装位置
   launch <id>            启动游戏（默认 direct 模式）
   steam-add <id>         将游戏加入 Steam 库（非 Steam 游戏快捷方式）
+  install <id>           假入库：让游戏在 Steam 库中显示为已安装（伪造 appmanifest + 联接）
+  uninstall <id>         取消假入库
   steam-uri <id>         仅输出 steam:// 启动 URI 与 appid
   remove <id>            从 Steam 库移除该游戏
   config-init            生成示例配置文件 config.yaml

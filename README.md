@@ -62,6 +62,15 @@ steam-gacha-launcher scan   # 列出内置游戏并检测本机安装
 
 > **appid 算法**与 Steam ROM Manager 一致：`crc32(exe + 名称) | 0x80000000`（写入 vdf 为 int32 小端；封面用长 id 为 `(id << 32) | 0x02000000`）。
 
+#### 2.5 「假入库」：让游戏在 Steam 库中显示为「已下载/已安装」
+
+普通「非 Steam 快捷方式」在库里显示为外部游戏。若想让游戏**像真正从 Steam 下载安装的一样**（出现在「已安装」分类、有绿色对勾、走 Steam 的启动管线），用 `install <id>`（GUI 中「假入库」按钮）：
+
+- **原理（纯配置操作，无注入）**：Steam 客户端启动时扫描 `steamapps/appmanifest_<appid>.acf` 决定库中显示哪些游戏。本工具生成该 ACF（`StateFlags=4` 已完全安装、`LastOwner`=你的 SteamID64），并用 **目录联接（junction）** 把 `steamapps/common/<installdir>` 指向你已有的国服安装目录——Steam 无需重新下载即可识别文件。
+- **前提**：`appid` 必须是该游戏**真实的 Steam appid**（Steam 才能按其启动配置拉起客户端）。已内置：终末地 `4732690`、绝区零 `4162040`、鸣潮 `3513350`；原神/星穹铁道无 Steam 版本，仅自定义 appid 时可显示「已安装」但无法被 Steam 拉起。
+- **启动国服**：假入库后用 `steam://rungameid/<appid>`（GUI「启动国服（经 Steam 库）」）即可由 Steam 拉起国服客户端。
+- **注意**：重启 Steam 生效。若国服客户端版本与 Steam 当前 depot 不一致，Steam 首次启动可能提示一次校验/更新（属正常行为）；`uninstall <id>` 可随时撤销（只删 ACF 与联接，**不动游戏文件**）。
+
 ### 3. 国服特有的启动参数与登录流程
 
 - 国服/海外服往往**共用同一主程序名**，区别在于大区参数（如 `-platform_type CN`）或主程序本身就是 CN 版（如原神国服 `YuanShen.exe`）。内置画像为保守默认，用户可用 `launch_args` 覆盖。
@@ -128,6 +137,10 @@ steam-gacha-launcher steam-add zzz-cn
 # 5. 重启 Steam 后，通过 Steam 一键拉起
 steam-gacha-launcher launch zzz-cn -mode steam
 
+# 5b. 「假入库」：让游戏在 Steam 库显示为已安装（伪造 appmanifest + 目录联接）
+steam-gacha-launcher install zzz-cn        # 假入库（需游戏有 Steam 版本）
+steam-gacha-launcher uninstall zzz-cn      # 撤销（不影响游戏文件）
+
 # 6. 覆盖路径与启动参数
 steam-gacha-launcher launch hsr-cn -path "D:/Star Rail" -args "-platform_type CN"
 
@@ -163,15 +176,15 @@ games:
 
 ## 内置支持的游戏
 
-| id | 名称 | 主程序 | 备注 |
-|----|------|--------|------|
-| `genshin-cn` | 原神 | `YuanShen.exe` | CN 主程序即国服 |
-| `hsr-cn` | 崩坏：星穹铁道 | `StarRail.exe` | 可用 `-platform_type CN` 区分 |
-| `zzz-cn` | 绝区零 | `ZenlessZoneZero.exe` | HoYoPlay 布局已兼容 |
-| `wuthering-waves-cn` | 鸣潮 | `Client-Win64-Shipping.exe` | 深度目录搜索定位 |
-| `endfield-cn` | 明日方舟：终末地 | `Endfield.exe` | 参考项目同款游戏 |
+| id | 名称 | 主程序 | Steam appid | 备注 |
+|----|------|--------|-------------|------|
+| `genshin-cn` | 原神 | `YuanShen.exe` | —（无 Steam 版） | CN 主程序即国服 |
+| `hsr-cn` | 崩坏：星穹铁道 | `StarRail.exe` | —（无 Steam 版） | 可用 `-platform_type CN` 区分 |
+| `zzz-cn` | 绝区零 | `ZenlessZoneZero.exe` | `4162040` | HoYoPlay 布局已兼容，可假入库 |
+| `wuthering-waves-cn` | 鸣潮 | `Client-Win64-Shipping.exe` | `3513350` | 深度目录搜索定位，可假入库 |
+| `endfield-cn` | 明日方舟：终末地 | `Endfield.exe` | `4732690` | 参考项目同款游戏，可假入库 |
 
-所有画像均为保守默认，实际以你本机安装为准；新增游戏只需在配置里写一条 `games.<id>`。
+所有画像均为保守默认，实际以你本机安装为准；新增游戏只需在配置里写一条 `games.<id>`。假入库的 appid/目录名可用 `steam_appid`、`steam_installdir` 覆盖。
 
 ---
 

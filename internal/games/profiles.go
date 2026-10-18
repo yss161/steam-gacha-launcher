@@ -65,6 +65,8 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"绝区零", "Zenless Zone Zero"}, Value: "InstallLocation"},
 		},
+		SteamAppID:      "4162040",
+		SteamInstallDir: "ZenlessZoneZero",
 	})
 
 	register(&Profile{
@@ -84,6 +86,8 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"鸣潮", "Wuthering Waves"}, Value: "InstallLocation"},
 		},
+		SteamAppID:      "3513350",
+		SteamInstallDir: "Wuthering Waves",
 	})
 
 	register(&Profile{
@@ -104,5 +108,7 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"终末地", "Endfield"}, Value: "InstallLocation"},
 		},
+		SteamAppID:      "4732690",
+		SteamInstallDir: "Arknights Endfield",
 	})
 }
