@@ -177,6 +177,11 @@ type gameSpec struct {
 	Icon            string
 	SteamAppID      string
 	SteamInstallDir string
+	SteamBuildID    string
+	SteamDepotID    string
+	SteamDepotManifest string
+	SteamExeRel     string
+	SteamSize       int64
 }
 
 func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
@@ -195,6 +200,11 @@ func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
 		spec.Tags = append([]string{}, p.Tags...)
 		spec.SteamAppID = p.SteamAppID
 		spec.SteamInstallDir = p.SteamInstallDir
+		spec.SteamBuildID = p.SteamBuildID
+		spec.SteamDepotID = p.SteamDepotID
+		spec.SteamDepotManifest = p.SteamDepotManifest
+		spec.SteamExeRel = p.SteamExeRel
+		spec.SteamSize = p.SteamSize
 	}
 	if hasCfg {
 		if gc.Name != "" {
@@ -220,6 +230,12 @@ func resolveSpec(cfg *config.Config, c *cli, id string) (*gameSpec, error) {
 		}
 		if gc.SteamInstallDir != "" {
 			spec.SteamInstallDir = gc.SteamInstallDir
+		}
+		if gc.SteamBuildID != "" {
+			spec.SteamBuildID = gc.SteamBuildID
+		}
+		if gc.SteamDepotManifest != "" {
+			spec.SteamDepotManifest = gc.SteamDepotManifest
 		}
 	}
 
@@ -437,7 +453,31 @@ func steamInstallDirOf(spec *gameSpec) string {
 	return d
 }
 
-// cmdInstall 假入库：让游戏在 Steam 库中显示为已安装（伪造 appmanifest + 目录联接）。
+// steamDepotOf 由 spec 组装 DepotInfo。
+func steamDepotOf(spec *gameSpec) steam.DepotInfo {
+	return steam.DepotInfo{
+		BuildID:  spec.SteamBuildID,
+		DepotID:  spec.SteamDepotID,
+		Manifest: spec.SteamDepotManifest,
+		Size:     spec.SteamSize,
+	}
+}
+
+// steamContentDir 计算 junction 目标（游戏内容根目录）：从检测到的主程序绝对路径
+// 中去掉 SteamExeRel（主程序相对内容根目录的路径）。
+func steamContentDir(spec *gameSpec) string {
+	if spec.SteamExeRel == "" {
+		return spec.WorkDir
+	}
+	exe := filepath.ToSlash(spec.ExePath)
+	rel := filepath.ToSlash(spec.SteamExeRel)
+	if strings.HasSuffix(exe, rel) {
+		return filepath.FromSlash(strings.TrimSuffix(exe, rel))
+	}
+	return spec.WorkDir
+}
+
+// cmdInstall 假入库：让游戏在 Steam 库中显示为已安装（伪造完整 appmanifest + 目录联接）。
 func cmdInstall(cfg *config.Config, c *cli, id string) error {
 	spec, err := resolveSpec(cfg, c, id)
 	if err != nil {
@@ -454,15 +494,16 @@ func cmdInstall(cfg *config.Config, c *cli, id string) error {
 		fmt.Println("提示：Steam 正在运行。假入库后需完全重启 Steam，库才会刷新显示。")
 	}
 	installdir := steamInstallDirOf(spec)
-	linkDir, err := steam.FakeInstall(steamPath, spec.SteamAppID, spec.Name, installdir, spec.WorkDir)
+	contentDir := steamContentDir(spec)
+	linkDir, err := steam.FakeInstall(steamPath, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec))
 	if err != nil {
 		return err
 	}
 	fmt.Printf("✅ 假入库完成\n")
-	fmt.Printf("  AppId:      %s\n", spec.SteamAppID)
+	fmt.Printf("  AppId:      %s (buildid %s)\n", spec.SteamAppID, spec.SteamBuildID)
 	fmt.Printf("  库内目录:    %s\n", linkDir)
-	fmt.Printf("  联接至(国服): %s\n", spec.WorkDir)
-	fmt.Println("\n请重启 Steam，「" + spec.Name + "」将显示为已安装，可从库中启动国服（有真实 Steam 版本时）。")
+	fmt.Printf("  联接至(国服): %s\n", contentDir)
+	fmt.Println("\n请重启 Steam，「" + spec.Name + "」将显示为已安装，可从库中启动国服。")
 	fmt.Printf("经 Steam 启动: steam://rungameid/%s\n", spec.SteamAppID)
 	return nil
 }

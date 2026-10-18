@@ -66,10 +66,10 @@ steam-gacha-launcher scan   # 列出内置游戏并检测本机安装
 
 普通「非 Steam 快捷方式」在库里显示为外部游戏。若想让游戏**像真正从 Steam 下载安装的一样**（出现在「已安装」分类、有绿色对勾、走 Steam 的启动管线），用 `install <id>`（GUI 中「假入库」按钮）：
 
-- **原理（纯配置操作，无注入）**：Steam 客户端启动时扫描 `steamapps/appmanifest_<appid>.acf` 决定库中显示哪些游戏。本工具生成该 ACF（`StateFlags=4` 已完全安装、`LastOwner`=你的 SteamID64），并用 **目录联接（junction）** 把 `steamapps/common/<installdir>` 指向你已有的国服安装目录——Steam 无需重新下载即可识别文件。
-- **前提**：`appid` 必须是该游戏**真实的 Steam appid**（Steam 才能按其启动配置拉起客户端）。已内置：异环 `4508340`、终末地 `4732690`、绝区零 `4162040`、鸣潮 `3513350`。
-- **启动国服**：假入库后用 `steam://rungameid/<appid>`（GUI「启动国服（经 Steam 库）」）即可由 Steam 拉起国服客户端。
-- **注意**：重启 Steam 生效。若国服客户端版本与 Steam 当前 depot 不一致，Steam 首次启动可能提示一次校验/更新（属正常行为）；`uninstall <id>` 可随时撤销（只删 ACF 与联接，**不动游戏文件**）。
+- **原理（纯配置操作，无注入）**：Steam 启动时扫描 `steamapps/appmanifest_<appid>.acf` 决定库中显示哪些游戏。本工具生成**完整清单**——`StateFlags=4`（已完全安装）+ **真实 buildid + InstalledDepots**（depot 及 manifest GID）+ `LastOwner`=你的 SteamID64，Steam 据此认为「该版本内容已安装」不再触发下载；并用 **目录联接（junction）** 把 `steamapps/common/<installdir>` 指向你的国服安装目录（按其结构联接，Steam 启动配置可在其中找到主程序）。
+- **前提**：`appid` 必须是该游戏**真实的 Steam appid**。已内置（含当前 buildid/depot 清单）：异环 `4508340`、终末地 `4732690`、绝区零 `4162040`、鸣潮 `3513350`。
+- **启动国服**：假入库后用 `steam://rungameid/<appid>`（GUI「启动国服（经 Steam 库）」）由 Steam 拉起国服客户端（覆盖层/时长/“正在玩”状态齐全）。
+- ⚠️ **游戏更新后**：buildid/depot 清单会过期，Steam 可能提示更新。此时在 config.yaml 更新该游戏的 `steam_buildid` / `steam_depot_manifest`（从 SteamDB 查最新值）后重新 `install` 即可；`uninstall <id>` 可随时撤销（只删清单与联接，**不动游戏文件**）。
 
 ### 3. 国服特有的启动参数与登录流程
 

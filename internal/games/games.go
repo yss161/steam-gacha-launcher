@@ -25,8 +25,13 @@ type Profile struct {
 	Tags         []string
 	RegHints     []RegHint
 	// 假入库（Steam 库显示为已安装）相关
-	SteamAppID      string // 该游戏在 Steam 的真实 appid（无 Steam 版本则为空）
-	SteamInstallDir string // steamapps/common 下的目录名
+	SteamAppID         string // 该游戏在 Steam 的真实 appid（无 Steam 版本则为空）
+	SteamInstallDir    string // steamapps/common 下的目录名
+	SteamBuildID       string // 当前公开分支 buildid（随更新变化）
+	SteamDepotID       string // 主 depot id
+	SteamDepotManifest string // depot 当前 manifest GID
+	SteamExeRel        string // 主程序相对游戏内容根目录的路径（用于定位 junction 目标）
+	SteamSize          int64  // depot 磁盘大小（字节）
 }
 
 var builtin []*Profile

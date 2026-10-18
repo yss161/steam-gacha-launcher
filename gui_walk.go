@@ -372,7 +372,8 @@ func (a *guiApp) onInstall() {
 		return
 	}
 	installdir := steamInstallDirOf(spec)
-	linkDir, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, spec.WorkDir)
+	contentDir := steamContentDir(spec)
+	linkDir, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec))
 	if err != nil {
 		a.err("假入库失败", err)
 		return
@@ -380,8 +381,8 @@ func (a *guiApp) onInstall() {
 	a.refreshDetail()
 	a.setStatus("已假入库：" + spec.Name)
 	walk.MsgBox(a.mw, "假入库完成",
-		fmt.Sprintf("AppId：%s\n库内目录：%s\n联接至：%s\n\n请重启 Steam，「%s」将显示为已安装，可从库中启动国服。",
-			spec.SteamAppID, linkDir, spec.WorkDir, spec.Name),
+		fmt.Sprintf("AppId：%s（buildid %s）\n库内目录：%s\n联接至：%s\n\n请重启 Steam，「%s」将显示为已安装，可从库中启动国服。",
+			spec.SteamAppID, spec.SteamBuildID, linkDir, contentDir, spec.Name),
 		walk.MsgBoxIconInformation)
 }
 

@@ -12,15 +12,24 @@ import (
 
 // 「假入库」：伪造 appmanifest + 目录联接，让 Steam 把游戏当作已安装的库内游戏。
 //
-// 原理（仅作配置级操作，不注入、不绕过任何校验）：
-//   1. Steam 客户端启动时扫描 steamapps/ 下的 appmanifest_<appid>.acf 来决定库中显示哪些游戏；
-//   2. 该 ACF 的 StateFlags=4 表示「已完全安装」，installdir 指向 steamapps/common/ 下的目录；
-//   3. 我们创建 junction（目录联接）把 steamapps/common/<installdir> 指向你已有的国服安装目录，
-//      使 Steam 无需重新下载即可识别文件；
-//   4. LastOwner 设为当前登录账号的 SteamID64，使安装归属于你。
+// 原理（纯配置操作，无注入、不绕过任何校验）：
+//  1. Steam 客户端启动时扫描 steamapps/ 下的 appmanifest_<appid>.acf 决定库中显示哪些游戏；
+//  2. 完整清单需 StateFlags=4（已完全安装）+ 真实 buildid + InstalledDepots（depot 及 manifest GID），
+//     Steam 据此认为「该版本这些内容已安装」，不再触发下载（经终末地实测验证）；
+//  3. 用目录联接（junction）把 steamapps/common/<installdir> 指向你的国服安装目录，
+//     使 Steam 按其启动配置在联接目录里找到主程序；
+//  4. LastOwner 设为当前登录账号的 SteamID64。
 //
-// 注意：需要游戏有真实的 Steam 版本（appid），Steam 才能按其启动配置拉起客户端；
-// 对没有 Steam 版本的游戏，仅能显示「已安装」，无法由 Steam 直接拉起。
+// 注意：appid 必须是该游戏真实的 Steam appid；buildid/depot manifest 会随游戏更新而变化，
+// 过期后 Steam 可能提示更新（可在配置中用 steam_buildid / steam_depot_manifest 覆盖）。
+
+// DepotInfo 描述一个游戏在 Steam 的 depot 信息（用于生成完整清单）。
+type DepotInfo struct {
+	BuildID  string // 当前公开分支 buildid
+	DepotID  string // 主 depot id
+	Manifest string // depot 当前 manifest GID
+	Size     int64  // depot 磁盘大小（字节）
+}
 
 // LibraryFolders 返回所有 Steam 库目录（主目录 + libraryfolders.vdf 中的附加库）。
 func LibraryFolders(steamPath string) []string {
@@ -32,7 +41,6 @@ func LibraryFolders(steamPath string) []string {
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, `"path"`) {
-			// "path"		"D:\\SteamLibrary"
 			parts := splitVDFLine(line)
 			if len(parts) == 2 {
 				p := strings.ReplaceAll(parts[1], `\\`, `\`)
@@ -101,7 +109,6 @@ func CurrentSteamID64(steamPath string) string {
 			}
 		}
 	}
-	// 优先 AutoLogin=1，否则取 timestamp 最大者
 	best := ""
 	var bestTS int64 = -1
 	for _, a := range accts {
@@ -119,18 +126,19 @@ func CurrentSteamID64(steamPath string) string {
 	return best
 }
 
-// FakeInstall 让游戏在 Steam 库中显示为已安装。返回 junction 目录路径。
+// FakeInstall 让游戏在 Steam 库中显示为已安装（完整清单）。
 //   steamPath: Steam 安装目录
-//   appID: 真实 Steam appid（十进制字符串）
+//   appID: 真实 Steam appid
 //   name: 游戏显示名
 //   installdir: steamapps/common 下的目录名
-//   sourceDir: 游戏主程序所在目录（junction 目标）
-func FakeInstall(steamPath, appID, name, installdir, sourceDir string) (string, error) {
+//   contentDir: 游戏内容根目录（junction 目标，其内部结构需与 Steam depot 一致）
+//   depot: depot 信息（buildid/depotid/manifest/size）
+func FakeInstall(steamPath, appID, name, installdir, contentDir string, depot DepotInfo) (string, error) {
 	if appID == "" {
 		return "", fmt.Errorf("未提供 Steam appid（该游戏需在 Steam 有对应版本）")
 	}
-	if _, err := os.Stat(sourceDir); err != nil {
-		return "", fmt.Errorf("游戏目录不存在: %s", sourceDir)
+	if _, err := os.Stat(contentDir); err != nil {
+		return "", fmt.Errorf("游戏目录不存在: %s", contentDir)
 	}
 	steamapps := filepath.Join(steamPath, "steamapps")
 	linkDir := filepath.Join(steamapps, "common", installdir)
@@ -141,15 +149,14 @@ func FakeInstall(steamPath, appID, name, installdir, sourceDir string) (string, 
 	}
 
 	// 1. 创建目录联接（无需管理员）
-	if err := createJunction(linkDir, sourceDir); err != nil {
+	if err := createJunction(linkDir, contentDir); err != nil {
 		return "", err
 	}
 
-	// 2. 生成 appmanifest
+	// 2. 生成完整 appmanifest
 	owner := CurrentSteamID64(steamPath)
-	acf := generateACF(appID, name, installdir, steamPath, owner)
+	acf := generateACF(appID, name, installdir, steamPath, owner, depot)
 	if err := os.WriteFile(acfPath, []byte(acf), 0o644); err != nil {
-		// 失败回滚 junction
 		_ = removeJunction(linkDir)
 		return "", fmt.Errorf("写入 appmanifest 失败: %w", err)
 	}
@@ -188,10 +195,27 @@ func IsFakeInstalled(steamPath, appID string) bool {
 	return err == nil
 }
 
-// generateACF 生成 appmanifest 文本（KeyValues 格式）。
-func generateACF(appID, name, installdir, steamPath, owner string) string {
+// generateACF 生成完整 appmanifest 文本（KeyValues 格式，含 buildid 与 InstalledDepots）。
+func generateACF(appID, name, installdir, steamPath, owner string, depot DepotInfo) string {
 	launcherPath := strings.ReplaceAll(filepath.Join(steamPath, "steam.exe"), `\`, `\\`)
 	now := time.Now().Unix()
+	if owner == "" {
+		owner = "0"
+	}
+	buildid := depot.BuildID
+	if buildid == "" {
+		buildid = "0"
+	}
+	depotID := depot.DepotID
+	manifest := depot.Manifest
+	size := depot.Size
+	if depotID == "" {
+		// 无 depot 信息时退化为最小结构（仍可能触发 Steam 校验/下载）
+		depotID = appID + "1"
+		manifest = "0"
+		size = 0
+	}
+
 	var b strings.Builder
 	b.WriteString("\"AppState\"\n{\n")
 	kv := func(k, v string, indent int) {
@@ -206,9 +230,9 @@ func generateACF(appID, name, installdir, steamPath, owner string) string {
 	kv("installdir", installdir, 1)
 	kv("LastUpdated", strconv.FormatInt(now, 10), 1)
 	kv("LastPlayed", "0", 1)
-	kv("SizeOnDisk", "0", 1)
+	kv("SizeOnDisk", strconv.FormatInt(size, 10), 1)
 	kv("StagingSize", "0", 1)
-	kv("buildid", "0", 1)
+	kv("buildid", buildid, 1)
 	kv("LastOwner", owner, 1)
 	kv("DownloadType", "0", 1)
 	kv("UpdateResult", "0", 1)
@@ -220,6 +244,11 @@ func generateACF(appID, name, installdir, steamPath, owner string) string {
 	kv("AutoUpdateBehavior", "0", 1)
 	kv("AllowOtherDownloadsWhileRunning", "0", 1)
 	kv("ScheduledAutoUpdate", "0", 1)
+	b.WriteString("\t\"InstalledDepots\"\n\t{\n")
+	b.WriteString("\t\t\"" + depotID + "\"\n\t\t{\n")
+	kv("manifest", manifest, 3)
+	kv("size", strconv.FormatInt(size, 10), 3)
+	b.WriteString("\t\t}\n\t}\n")
 	b.WriteString("\t\"UserConfig\"\n\t{\n")
 	kv("language", "schinese", 2)
 	b.WriteString("\t}\n")

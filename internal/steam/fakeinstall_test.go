@@ -57,7 +57,8 @@ func TestFakeInstallRoundTrip(t *testing.T) {
 		t.Fatal("不应已入库")
 	}
 
-	linkDir, err := FakeInstall(sp, "4162040", "绝区零", "ZenlessZoneZero", src)
+	depot := DepotInfo{BuildID: "25595825", DepotID: "4162041", Manifest: "2185079426383374948", Size: 81796257366}
+	linkDir, err := FakeInstall(sp, "4162040", "绝区零", "ZenlessZoneZero", src, depot)
 	if err != nil {
 		t.Fatalf("假入库失败: %v", err)
 	}
@@ -74,7 +75,11 @@ func TestFakeInstallRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(acf)
-	for _, want := range []string{`"appid"`, `"4162040"`, `"StateFlags"`, `"4"`, `"installdir"`, `"ZenlessZoneZero"`, `"LastOwner"`, `"76561199799980040"`} {
+	for _, want := range []string{
+		`"appid"`, `"4162040"`, `"StateFlags"`, `"4"`,
+		`"installdir"`, `"ZenlessZoneZero"`, `"LastOwner"`, `"76561199799980040"`,
+		`"buildid"`, `"25595825"`, `"InstalledDepots"`, `"4162041"`, `"2185079426383374948"`,
+	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("acf 缺少 %q\n%s", want, s)
 		}
@@ -99,7 +104,7 @@ func TestFakeInstallRoundTrip(t *testing.T) {
 
 func TestFakeInstallNoAppID(t *testing.T) {
 	sp := setupFakeSteam(t)
-	if _, err := FakeInstall(sp, "", "某游戏", "x", sp); err == nil {
+	if _, err := FakeInstall(sp, "", "某游戏", "x", sp, DepotInfo{}); err == nil {
 		t.Fatal("空 appid 应报错")
 	}
 }

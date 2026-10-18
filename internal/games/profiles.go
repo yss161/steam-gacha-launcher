@@ -21,21 +21,24 @@ func init() {
 			`C:\Program Files\NTE`,
 			`D:\NTE`,
 		},
-		// 虚幻引擎客户端：常见主程序名（含递归搜索兜底）
+		// 虚幻引擎客户端：真实主程序为 NTELauncher\NTEGame.exe（顶层 NTELauncher.exe 为启动器）
 		ExeNames: []string{
-			`NTE.exe`,
-			`NTE\Binaries\Win64\NTE-Win64-Shipping.exe`,
-			`Neverness to Everness.exe`,
-			`NTE-Win64-Shipping.exe`,
-			`Client-Win64-Shipping.exe`,
+			`NTELauncher\NTEGame.exe`,
+			`NTELauncher.exe`,
+			`Client\WindowsNoEditor\NTE\Binaries\Win64\NTE-Win64-Shipping.exe`,
 		},
-		LauncherExe: `launcher.exe`,
+		LauncherExe: `NTELauncher.exe`,
 		Tags:        []string{"异环", "完美世界"},
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"异环", "Neverness to Everness", "NTE"}, Value: "InstallLocation"},
 		},
-		SteamAppID:      "4508340",
-		SteamInstallDir: "Neverness to Everness",
+		SteamAppID:         "4508340",
+		SteamInstallDir:    "Neverness to Everness",
+		SteamBuildID:       "25643250",
+		SteamDepotID:       "4508341",
+		SteamDepotManifest: "7894482336424447226",
+		SteamExeRel:        `NTELauncher\NTEGame.exe`,
+		SteamSize:          104292543365,
 	})
 
 	register(&Profile{
@@ -55,8 +58,13 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"绝区零", "Zenless Zone Zero"}, Value: "InstallLocation"},
 		},
-		SteamAppID:      "4162040",
-		SteamInstallDir: "ZenlessZoneZero",
+		SteamAppID:         "4162040",
+		SteamInstallDir:    "ZenlessZoneZero",
+		SteamBuildID:       "25595825",
+		SteamDepotID:       "4162041",
+		SteamDepotManifest: "2185079426383374948",
+		SteamExeRel:        `ZenlessZoneZero.exe`,
+		SteamSize:          81796257366,
 	})
 
 	register(&Profile{
@@ -76,8 +84,13 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"鸣潮", "Wuthering Waves"}, Value: "InstallLocation"},
 		},
-		SteamAppID:      "3513350",
-		SteamInstallDir: "Wuthering Waves",
+		SteamAppID:         "3513350",
+		SteamInstallDir:    "Wuthering Waves",
+		SteamBuildID:       "25950293",
+		SteamDepotID:       "3513351",
+		SteamDepotManifest: "7436983586168136855",
+		SteamExeRel:        `Client\Binaries\Win64\Client-Win64-Shipping.exe`,
+		SteamSize:          85877870059,
 	})
 
 	register(&Profile{
@@ -98,7 +111,12 @@ func init() {
 		RegHints: []RegHint{
 			{Root: "HKLM", Match: []string{"终末地", "Endfield"}, Value: "InstallLocation"},
 		},
-		SteamAppID:      "4732690",
-		SteamInstallDir: "Arknights Endfield",
+		SteamAppID:         "4732690",
+		SteamInstallDir:    "Arknights Endfield",
+		SteamBuildID:       "25728898",
+		SteamDepotID:       "4732691",
+		SteamDepotManifest: "3024011413268238677",
+		SteamExeRel:        `Endfield.exe`,
+		SteamSize:          0,
 	})
 }
