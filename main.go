@@ -19,6 +19,7 @@ import (
 	"github.com/yss161/steam-gacha-launcher/internal/games"
 	"github.com/yss161/steam-gacha-launcher/internal/launch"
 	"github.com/yss161/steam-gacha-launcher/internal/steam"
+	"github.com/yss161/steam-gacha-launcher/internal/update"
 )
 
 var version = "dev"
@@ -115,6 +116,8 @@ func run(args []string) error {
 	case "version", "-v", "--version":
 		fmt.Println(version)
 		return nil
+	case "update":
+		return cmdUpdate()
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -477,6 +480,29 @@ func steamContentDir(spec *gameSpec) string {
 	return spec.WorkDir
 }
 
+// cmdUpdate 检查并应用自更新。
+func cmdUpdate() error {
+	rel, err := update.LatestRelease()
+	if err != nil {
+		return err
+	}
+	if !update.IsNewer(version, rel.Tag) {
+		fmt.Printf("✅ 已是最新版本（当前 %s，最新 %s）。\n", version, rel.Tag)
+		return nil
+	}
+	fmt.Printf("发现新版本：%s（当前 %s）\n%s\n\n正在下载更新…\n", rel.Tag, version, rel.Name)
+	tmp := filepath.Join(os.TempDir(), "steam-gacha-launcher-update.exe")
+	if err := update.Download(rel.URL, tmp); err != nil {
+		return err
+	}
+	if err := update.SelfReplace(tmp); err != nil {
+		return err
+	}
+	fmt.Println("✅ 下载完成，程序将在数秒后自动替换并重启。")
+	os.Exit(0)
+	return nil
+}
+
 // cmdInstall 假入库：让游戏在 Steam 库中显示为已安装（伪造完整 appmanifest + 目录联接）。
 func cmdInstall(cfg *config.Config, c *cli, id string) error {
 	spec, err := resolveSpec(cfg, c, id)
@@ -495,6 +521,13 @@ func cmdInstall(cfg *config.Config, c *cli, id string) error {
 	}
 	installdir := steamInstallDirOf(spec)
 	contentDir := steamContentDir(spec)
+	// 幂等：若已假入库（清单或 junction 存在），先移除再重装，实现「一键刷新」
+	if steam.IsFakeInstalled(steamPath, spec.SteamAppID) {
+		fmt.Println("检测到已假入库，正在刷新为最新数据…")
+		_ = steam.RemoveFakeInstall(steamPath, spec.SteamAppID, installdir)
+	} else if _, err := os.Lstat(filepath.Join(steamPath, "steamapps", "common", installdir)); err == nil {
+		_ = steam.RemoveFakeInstall(steamPath, spec.SteamAppID, installdir)
+	}
 	linkDir, err := steam.FakeInstall(steamPath, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec))
 	if err != nil {
 		return err
@@ -586,8 +619,9 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
   scan                   列出内置游戏并检测本机安装位置
   launch <id>            启动游戏（默认 direct 模式）
   steam-add <id>         将游戏加入 Steam 库（非 Steam 游戏快捷方式）
-  install <id>           假入库：让游戏在 Steam 库中显示为已安装（伪造 appmanifest + 联接）
+  install <id>           假入库：一键让游戏在 Steam 库中显示为已安装（重复执行即刷新）
   uninstall <id>         取消假入库
+  update                 检查并自更新到最新版本
   steam-uri <id>         仅输出 steam:// 启动 URI 与 appid
   remove <id>            从 Steam 库移除该游戏
   config-init            生成示例配置文件 config.yaml

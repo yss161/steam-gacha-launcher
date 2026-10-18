@@ -16,6 +16,7 @@ import (
 	"github.com/yss161/steam-gacha-launcher/internal/games"
 	"github.com/yss161/steam-gacha-launcher/internal/launch"
 	"github.com/yss161/steam-gacha-launcher/internal/steam"
+	"github.com/yss161/steam-gacha-launcher/internal/update"
 )
 
 // gameRow 为列表中的一行。
@@ -89,6 +90,8 @@ func openNativeGUI(c *cli) error {
 				Action{Text: "退出(&X)", OnTriggered: func() { a.mw.Close() }},
 			}},
 			Menu{Text: "帮助(&H)", Items: []MenuItem{
+				Action{Text: "检查更新(&U)", OnTriggered: a.onCheckUpdate},
+				Separator{},
 				Action{Text: "关于(&A)", OnTriggered: a.onAbout},
 			}},
 		},
@@ -142,7 +145,7 @@ func openNativeGUI(c *cli) error {
 							TextLabel{AssignTo: &a.detailLbl, Text: "", MinSize: Size{Width: 260}},
 							VSpacer{},
 							PushButton{Text: "启动国服（经 Steam 库）", OnClicked: a.onLaunchSteamApp},
-							PushButton{Text: "假入库（显示为已安装）", OnClicked: a.onInstall},
+							PushButton{Text: "一键假入库 / 刷新", OnClicked: a.onInstall},
 							PushButton{Text: "取消假入库", OnClicked: a.onUninstall},
 							PushButton{Text: "编辑路径/参数", OnClicked: a.onEdit},
 							PushButton{Text: "设置", OnClicked: a.onSettings},
@@ -373,17 +376,59 @@ func (a *guiApp) onInstall() {
 	}
 	installdir := steamInstallDirOf(spec)
 	contentDir := steamContentDir(spec)
+	// 幂等：已入库则先移除再重装（一键刷新到最新数据）
+	refreshing := steam.IsFakeInstalled(sp, spec.SteamAppID)
+	if refreshing {
+		_ = steam.RemoveFakeInstall(sp, spec.SteamAppID, installdir)
+	} else if _, err := os.Lstat(filepath.Join(sp, "steamapps", "common", installdir)); err == nil {
+		refreshing = true
+		_ = steam.RemoveFakeInstall(sp, spec.SteamAppID, installdir)
+	}
 	linkDir, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec))
 	if err != nil {
 		a.err("假入库失败", err)
 		return
 	}
 	a.refreshDetail()
-	a.setStatus("已假入库：" + spec.Name)
-	walk.MsgBox(a.mw, "假入库完成",
+	title := "假入库完成"
+	if refreshing {
+		title = "已刷新"
+	}
+	a.setStatus(spec.Name + "：" + title)
+	walk.MsgBox(a.mw, title,
 		fmt.Sprintf("AppId：%s（buildid %s）\n库内目录：%s\n联接至：%s\n\n请重启 Steam，「%s」将显示为已安装，可从库中启动国服。",
 			spec.SteamAppID, spec.SteamBuildID, linkDir, contentDir, spec.Name),
 		walk.MsgBoxIconInformation)
+}
+
+// onCheckUpdate 检查并应用自更新。
+func (a *guiApp) onCheckUpdate() {
+	a.setStatus("正在检查更新…")
+	rel, err := update.LatestRelease()
+	if err != nil {
+		a.err("检查更新失败", err)
+		return
+	}
+	if !update.IsNewer(version, rel.Tag) {
+		walk.MsgBox(a.mw, "检查更新", fmt.Sprintf("已是最新版本（%s）。", version), walk.MsgBoxIconInformation)
+		return
+	}
+	if walk.MsgBox(a.mw, "发现新版本",
+		fmt.Sprintf("当前：%s\n最新：%s\n\n是否现在下载并更新？", version, rel.Tag),
+		walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
+		return
+	}
+	tmp := filepath.Join(os.TempDir(), "steam-gacha-launcher-update.exe")
+	a.setStatus("正在下载更新…")
+	if err := update.Download(rel.URL, tmp); err != nil {
+		a.err("下载失败", err)
+		return
+	}
+	if err := update.SelfReplace(tmp); err != nil {
+		a.err("更新失败", err)
+		return
+	}
+	os.Exit(0)
 }
 
 // onUninstall 取消假入库（不影响游戏文件）。

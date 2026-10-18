@@ -3,6 +3,8 @@
 > 一个用于**通过 Steam 启动国服二次元游戏（二游）**的 Windows 命令行小工具。
 > 参考 [Better-Endfield](https://github.com/Dr-hydra/Better-Endfield) 的 Steam 启动思路，但**只做「启动器」、不做任何注入/魔改**。
 
+> 📖 **[详细使用教程 → TUTORIAL.md](./TUTORIAL.md)**（下载安装 / 假入库详解 / CLI / 配置 / 自更新 / FAQ）
+
 ## 🖥️ 图形化界面（原生 Win32 程序）
 
 **双击 exe 即可打开**，无需命令行、无需浏览器。也可运行：
