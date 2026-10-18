@@ -44,7 +44,7 @@ go build -trimpath -ldflags "-s -w -H windowsgui" -o steam-gacha-launcher.exe .
 
 ```
 菜单栏：文件 / 帮助
-工具栏：直接启动 | 经启动器 | 经 Steam | 加入 Steam | 移除
+工具栏：直接启动 | 经启动器 | 经 Steam 启动国服 | 一键假入库·刷新 | 取消假入库
 左表格：游戏 | 状态 | 主程序路径          右「详情」面板：信息与操作按钮
 状态栏：操作反馈（左） + Steam 状态（右）
 ```
@@ -70,7 +70,7 @@ go build -trimpath -ldflags "-s -w -H windowsgui" -o steam-gacha-launcher.exe .
 
 ### 它是什么
 
-普通「非 Steam 快捷方式」在 Steam 库里显示为**外部游戏**。「假入库」则让游戏**像真正从 Steam 下载安装的一样**：出现在「已安装」分类、带绿色对勾、走 Steam 的启动管线（覆盖层 / F12 截图 / 手柄 / 时长统计 / “正在玩”状态）。
+「假入库」让游戏**像真正从 Steam 下载安装的一样**：出现在「已安装」分类、带绿色对勾、走 Steam 的启动管线（覆盖层 / F12 截图 / 手柄 / 时长统计 / “正在玩”状态）。
 
 ### 原理（纯配置操作，无注入、不破解）
 
@@ -116,13 +116,10 @@ steam-gacha-launcher <命令> [选项]
   gui             打开图形界面（原生 Win32 窗口）
   list            列出内置支持的游戏
   scan            列出内置游戏并检测本机安装位置
-  launch <id>     启动游戏（默认 direct）
-  steam-add <id>  将游戏加入 Steam 库（非 Steam 快捷方式）
+  launch <id>     启动游戏（默认 direct；steam 模式=假入库后经 Steam 启动国服）
   install <id>    假入库（一键；重复执行即刷新为最新数据）
   uninstall <id>  取消假入库
   update          检查并自更新到最新版本
-  steam-uri <id>  输出 steam:// 启动 URI 与 appid
-  remove <id>     从 Steam 库移除（非 Steam 快捷方式）
   config-init     生成示例配置 config.yaml
   version         显示版本
 
@@ -211,9 +208,8 @@ games:
 **Q2：游戏检测不到？**
 点「重新扫描」；仍不行则**双击该行**，在弹窗里手动填写「安装路径」（主程序所在目录）保存。若是新游戏，可发我它的主程序名/安装路径，我补进内置画像。
 
-**Q3：「经 Steam 启动」和「假入库启动」有什么区别？**
-- 经 Steam（快捷方式）：把游戏加入 Steam「非 Steam 游戏」库，能覆盖层/手柄，但库里显示为外部游戏。
-- 假入库启动：游戏显示为**真正的 Steam 已安装游戏**，体验最接近原生（含“正在玩”状态、库内封面等）。
+**Q3：「经 Steam 启动国服」具体做了什么？**
+点「经 Steam 启动国服」（或 `launch <id> -mode steam`）时：若该游戏尚未假入库，会自动先「假入库」；然后用 `steam://rungameid/<appid>` 由 Steam 拉起国服客户端。游戏在库里显示为**真正的 Steam 已安装游戏**（含“正在玩”状态、库内封面、覆盖层/手柄/时长统计）。
 
 **Q4：假入库后 Steam 仍提示下载/更新？**
 通常是游戏刚更新、内置 buildid 过期。步骤：①「帮助 → 检查更新」升级工具；②再点「一键假入库 / 刷新」。仍不行则到 [SteamDB](https://steamdb.info) 查该游戏最新 `buildid` 填进 config 后刷新。

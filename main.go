@@ -136,21 +136,6 @@ func run(args []string) error {
 			return fmt.Errorf("用法: launch <游戏id>")
 		}
 		return cmdLaunch(cfg, c, pos[0])
-	case "steam-add", "add":
-		if len(pos) < 1 {
-			return fmt.Errorf("用法: steam-add <游戏id>")
-		}
-		return cmdSteamAdd(cfg, c, pos[0])
-	case "steam-uri", "uri":
-		if len(pos) < 1 {
-			return fmt.Errorf("用法: steam-uri <游戏id>")
-		}
-		return cmdSteamURI(cfg, c, pos[0])
-	case "remove":
-		if len(pos) < 1 {
-			return fmt.Errorf("用法: remove <游戏id>")
-		}
-		return cmdRemove(cfg, c, pos[0])
 	case "install":
 		if len(pos) < 1 {
 			return fmt.Errorf("用法: install <游戏id>")
@@ -351,11 +336,27 @@ func cmdLaunch(cfg *config.Config, c *cli, id string) error {
 		}
 		return launch.Run(o)
 	case "steam":
-		appID, err := ensureShortcut(cfg, c, spec)
+		// 经 Steam 启动 = 确保已假入库（让 Steam 以为已下载），再用 steam://rungameid/<appid> 拉起国服
+		if spec.SteamAppID == "" {
+			return fmt.Errorf("游戏「%s」无对应 Steam 版本（未提供 appid），无法经 Steam 启动。可改用 direct/launcher 模式", spec.Name)
+		}
+		sp, err := steam.FindSteamPath(cfg.Steam.Path)
 		if err != nil {
 			return err
 		}
-		uri := steam.LaunchURI(appID)
+		installdir := steamInstallDirOf(spec)
+		if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
+			if c.dryRun {
+				fmt.Printf("[dry-run] 将假入库「%s」（appid %s）\n", spec.Name, spec.SteamAppID)
+			} else {
+				contentDir := steamContentDir(spec)
+				if _, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec)); err != nil {
+					return fmt.Errorf("假入库失败: %w（可先运行 install %s）", err, spec.ID)
+				}
+				fmt.Printf("已自动假入库（重启 Steam 后生效）。\n")
+			}
+		}
+		uri := steam.LaunchURI(spec.SteamAppID)
 		fmt.Printf("经 Steam 启动: %s\n", uri)
 		if c.dryRun {
 			return nil
@@ -364,69 +365,6 @@ func cmdLaunch(cfg *config.Config, c *cli, id string) error {
 	default:
 		return fmt.Errorf("未知启动方式 %q（可选 direct|launcher|steam）", mode)
 	}
-}
-
-func cmdSteamAdd(cfg *config.Config, c *cli, id string) error {
-	spec, err := resolveSpec(cfg, c, id)
-	if err != nil {
-		return err
-	}
-	appID, err := ensureShortcut(cfg, c, spec)
-	if err != nil {
-		return err
-	}
-	fmt.Println()
-	fmt.Printf("已加入 Steam 库。请重启 Steam 后在库中找到「%s」。\n", spec.Name)
-	fmt.Printf("  AppId: %d\n", uint32(appID))
-	fmt.Printf("  URI:   %s\n", steam.LaunchURI(appID))
-	fmt.Printf("  封面用长 AppId: %d\n", steam.GenerateLongAppId(spec.ExePath, spec.Name))
-	return nil
-}
-
-func cmdSteamURI(cfg *config.Config, c *cli, id string) error {
-	spec, err := resolveSpec(cfg, c, id)
-	if err != nil {
-		return err
-	}
-	appID := steam.GenerateAppId(spec.ExePath, spec.Name)
-	fmt.Printf("游戏: %s\n", spec.Name)
-	fmt.Printf("Exe:  %s\n", spec.ExePath)
-	fmt.Println()
-	fmt.Printf("启动 URI:  %s\n", steam.LaunchURI(appID))
-	fmt.Printf("AppId:     %d\n", uint32(appID))
-	fmt.Printf("长 AppId:  %d\n", steam.GenerateLongAppId(spec.ExePath, spec.Name))
-	fmt.Println()
-	fmt.Println("提示：只有在 `steam-add` 将游戏加入 Steam 库后，上述 URI 才能启动。")
-	return nil
-}
-
-func cmdRemove(cfg *config.Config, c *cli, id string) error {
-	spec, err := resolveSpec(cfg, c, id)
-	if err != nil {
-		return err
-	}
-	if !c.force && steam.IsSteamRunning() {
-		return fmt.Errorf("Steam 正在运行，请先完全退出 Steam（可用 -force 忽略）")
-	}
-	steamPath, err := steam.FindSteamPath(cfg.Steam.Path)
-	if err != nil {
-		return err
-	}
-	ud, err := steam.FindUserDataDir(steamPath, cfg.Steam.AccountID)
-	if err != nil {
-		return err
-	}
-	vdf := steam.ShortcutsPath(ud)
-	ok, err := steam.RemoveShortcut(vdf, spec.ExePath)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		fmt.Println("未在 Steam 库中找到该游戏。")
-		return nil
-	}
-	fmt.Println("已从 Steam 库移除该游戏，请重启 Steam 生效。")
-	return nil
 }
 
 func cmdConfigInit(c *cli) error {
@@ -579,30 +517,6 @@ func resolveLauncher(spec *gameSpec) (string, error) {
 	return "", fmt.Errorf("未找到官方启动器 %s（已尝试 %v）", spec.LauncherExe, cands)
 }
 
-func ensureShortcut(cfg *config.Config, c *cli, spec *gameSpec) (uint32, error) {
-	steamPath, err := steam.FindSteamPath(cfg.Steam.Path)
-	if err != nil {
-		return 0, err
-	}
-	ud, err := steam.FindUserDataDir(steamPath, cfg.Steam.AccountID)
-	if err != nil {
-		return 0, err
-	}
-	vdf := steam.ShortcutsPath(ud)
-	launchOptions := strings.Join(spec.Args, " ")
-	fmt.Printf("Steam 目录: %s\n", steamPath)
-	fmt.Printf("shortcuts.vdf: %s\n", vdf)
-	fmt.Printf("写入快捷方式: %s → %s\n", spec.Name, spec.ExePath)
-	if c.dryRun {
-		fmt.Println("[dry-run] 未实际写入")
-		return steam.GenerateAppId(spec.ExePath, spec.Name), nil
-	}
-	if !c.force && steam.IsSteamRunning() {
-		return 0, fmt.Errorf("Steam 正在运行，直接写入会被覆盖。请先完全退出 Steam（可用 -force 忽略，或用 `steam-uri` 仅生成 URI）")
-	}
-	return steam.AddShortcut(vdf, spec.ExePath, spec.WorkDir, spec.Name, launchOptions, spec.Tags, spec.Icon)
-}
-
 func printUsage() {
 	fmt.Print(usageText)
 }
@@ -617,13 +531,10 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
   gui                    打开图形界面（原生 Win32 窗口）
   list                   列出内置支持的游戏
   scan                   列出内置游戏并检测本机安装位置
-  launch <id>            启动游戏（默认 direct 模式）
-  steam-add <id>         将游戏加入 Steam 库（非 Steam 游戏快捷方式）
-  install <id>           假入库：一键让游戏在 Steam 库中显示为已安装（重复执行即刷新）
+  launch <id>            启动游戏（默认 direct；steam 模式=假入库后经 Steam 启动国服）
+  install <id>           假入库：一键让 Steam 以为游戏已下载（重复执行即刷新）
   uninstall <id>         取消假入库
   update                 检查并自更新到最新版本
-  steam-uri <id>         仅输出 steam:// 启动 URI 与 appid
-  remove <id>            从 Steam 库移除该游戏
   config-init            生成示例配置文件 config.yaml
   version                显示版本
 
@@ -639,9 +550,10 @@ const usageText = `steam-gacha-launcher —— 通过 Steam 启动国服二游
 示例:
   steam-gacha-launcher                      # 双击 / 无参数：直接打开图形界面
   steam-gacha-launcher scan
-  steam-gacha-launcher launch yi-huan
-  steam-gacha-launcher launch yi-huan -mode launcher
-  steam-gacha-launcher launch zzz-cn -mode steam
-  steam-gacha-launcher steam-add zzz-cn
+  steam-gacha-launcher launch yi-huan                    # 直接启动
+  steam-gacha-launcher launch yi-huan -mode launcher     # 经官方启动器
+  steam-gacha-launcher install yi-huan                   # 一键假入库（让 Steam 以为已下载）
+  steam-gacha-launcher launch yi-huan -mode steam        # 经 Steam 启动国服（自动假入库）
   steam-gacha-launcher launch yi-huan -path "D:/NTE" -args "-platform_type CN"
+  steam-gacha-launcher update                            # 检查自更新
 `

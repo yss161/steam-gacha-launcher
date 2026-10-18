@@ -195,6 +195,11 @@ func IsFakeInstalled(steamPath, appID string) bool {
 	return err == nil
 }
 
+// LaunchURI 返回经 Steam 库启动的 URI（steam://rungameid/<appid>）。
+func LaunchURI(appID string) string {
+	return "steam://rungameid/" + appID
+}
+
 // generateACF 生成完整 appmanifest 文本（KeyValues 格式，含 buildid 与 InstalledDepots）。
 func generateACF(appID, name, installdir, steamPath, owner string, depot DepotInfo) string {
 	launcherPath := strings.ReplaceAll(filepath.Join(steamPath, "steam.exe"), `\`, `\\`)

@@ -17,9 +17,9 @@ steam-gacha-launcher gui        # 同上
 界面为**原生 Win32 窗口**（基于 [Walk](https://github.com/lxn/walk)，使用系统标准控件），是真正的桌面程序，不含任何浏览器/网页组件。布局参考专业桌面工具：
 
 - **菜单栏**：文件（重新扫描 `Ctrl+R`、打开配置文件、退出）、帮助（关于）；
-- **工具栏**：直接启动 / 经启动器 / 经 Steam / 加入 Steam / 移除；
+- **工具栏**：直接启动 / 经启动器 / 经 Steam 启动国服 / 一键假入库·刷新 / 取消假入库；
 - **左右分栏**（可拖动分割条）：左侧游戏表格（状态列绿/灰着色、可拖拽列宽/排序），右侧「详情」面板实时显示选中游戏的信息与操作按钮；
-- **右键菜单**：在表格行上右键可直接启动 / 加移除 Steam / 编辑；
+- **右键菜单**：在表格行上右键可启动 / 假入库·刷新 / 取消假入库 / 编辑；
 - **状态栏**：左侧操作反馈 + 右侧 Steam 状态（运行中/未运行）；
 - **双击游戏行**或「编辑路径/参数」弹出原生对话框修改路径与参数；「设置」修改 Steam 目录/账号；全部**保存到 config.yaml**。
 
@@ -57,16 +57,16 @@ steam-gacha-launcher scan   # 列出内置游戏并检测本机安装
 
 ### 2. 通过 Steam 启动
 
-两种互斥、可叠加的方式：
+核心思路是「**假入库**」：让 Steam 以为游戏已经从 Steam 下载安装（实际是国服客户端），然后像普通 Steam 游戏一样从库里启动（覆盖层 / F12 截图 / 手柄 / 时长统计 / “正在玩”状态齐全）。
 
-- **快捷方式（shortcuts.vdf）**：把游戏主程序写入 Steam 的非 Steam 游戏库（`userdata/<账号>/config/shortcuts.vdf`），`steam-add <id>`。写入前自动备份为 `.bak`、去重、并在 Steam 运行时给出安全提示。
-- **启动参数 / URI**：`steam-uri <id>` 输出 `steam://rungameid/<appid>`；`launch <id> -mode steam` 一键「确保已入库 + 通过 Steam 拉起」。
+- `install <id>`（GUI「一键假入库 / 刷新」）：写入完整 `appmanifest` + 目录联接，让游戏显示为已安装；
+- `launch <id> -mode steam`（GUI「经 Steam 启动国服」）：若尚未假入库会自动先假入库，再用 `steam://rungameid/<appid>` 由 Steam 拉起国服客户端。
 
-> **appid 算法**与 Steam ROM Manager 一致：`crc32(exe + 名称) | 0x80000000`（写入 vdf 为 int32 小端；封面用长 id 为 `(id << 32) | 0x02000000`）。
+> 详见下方「假入库详解」。
 
 #### 2.5 「假入库」：让游戏在 Steam 库中显示为「已下载/已安装」
 
-普通「非 Steam 快捷方式」在库里显示为外部游戏。若想让游戏**像真正从 Steam 下载安装的一样**（出现在「已安装」分类、有绿色对勾、走 Steam 的启动管线），用 `install <id>`（GUI 中「假入库」按钮）：
+若想让游戏**像真正从 Steam 下载安装的一样**（出现在「已安装」分类、有绿色对勾、走 Steam 的启动管线），用 `install <id>`（GUI 中「假入库」按钮）：
 
 - **原理（纯配置操作，无注入）**：Steam 启动时扫描 `steamapps/appmanifest_<appid>.acf` 决定库中显示哪些游戏。本工具生成**完整清单**——`StateFlags=4`（已完全安装）+ **真实 buildid + InstalledDepots**（depot 及 manifest GID）+ `LastOwner`=你的 SteamID64，Steam 据此认为「该版本内容已安装」不再触发下载；并用 **目录联接（junction）** 把 `steamapps/common/<installdir>` 指向你的国服安装目录（按其结构联接，Steam 启动配置可在其中找到主程序）。
 - **前提**：`appid` 必须是该游戏**真实的 Steam appid**。已内置（含当前 buildid/depot 清单）：异环 `4508340`、终末地 `4732690`、绝区零 `4162040`、鸣潮 `3513350`。
@@ -133,10 +133,9 @@ steam-gacha-launcher launch yi-huan
 # 3. 经官方启动器启动（需要启动器令牌的游戏）
 steam-gacha-launcher launch wuthering-waves-cn -mode launcher
 
-# 4. 加入 Steam 库（请先完全退出 Steam，或加 -force）
-steam-gacha-launcher steam-add zzz-cn
-
-# 5. 重启 Steam 后，通过 Steam 一键拉起
+# 4. 一键假入库（让 Steam 以为已下载），重启 Steam 后经 Steam 启动国服
+steam-gacha-launcher install zzz-cn
+# 5. 重启 Steam 后：
 steam-gacha-launcher launch zzz-cn -mode steam
 
 # 5b. 「假入库」：让游戏在 Steam 库显示为已安装（伪造 appmanifest + 目录联接）
@@ -195,7 +194,7 @@ games:
 |------|-----------------|--------|
 | 定位 | 为终末地注入 Mod/Hook（IL2CPP 解析、XInput 代理、覆盖层注入等） | 纯启动器，**零注入** |
 | 借鉴点 | 「多启动器识别」「免启动器直接拉起」「启动参数配置」等**启动路径**思路 | 复用上述启动思路 |
-| Steam 集成 | XInput 代理 / 覆盖层注入 | 标准非 Steam 游戏快捷方式（shortcuts.vdf） |
+| Steam 集成 | XInput 代理 / 覆盖层注入 | 假入库（伪造完整 appmanifest + 目录联接） |
 | 风险 | 涉及游戏运行时注入 | 仅操作 Steam 库与进程启动，风险低 |
 
 ---
@@ -214,7 +213,7 @@ steam-gacha-launcher/
 │   ├── games/                   # 游戏画像 + 内置列表
 │   ├── detect/                  # 注册表/目录/搜索定位
 │   ├── launch/                  # 进程启动与 URI 打开
-│   └── steam/                   # Steam 目录检测 + shortcuts.vdf 读写
+│   └── steam/                   # Steam 目录检测 + 假入库(appmanifest/junction)
 ├── config.example.yaml
 ├── .github/workflows/build.yml  # 云端编译（windows-2022，纯 Go）
 └── LICENSE

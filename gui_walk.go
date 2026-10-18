@@ -101,10 +101,10 @@ func openNativeGUI(c *cli) error {
 			Items: []MenuItem{
 				Action{Text: "直接启动", OnTriggered: func() { a.launch("direct") }},
 				Action{Text: "经启动器", OnTriggered: func() { a.launch("launcher") }},
-				Action{Text: "经 Steam", OnTriggered: func() { a.launch("steam") }},
+				Action{Text: "经 Steam 启动国服", OnTriggered: func() { a.launch("steam") }},
 				Separator{},
-				Action{Text: "加入 Steam", OnTriggered: a.onAdd},
-				Action{Text: "移除", OnTriggered: a.onRemove},
+				Action{Text: "一键假入库 / 刷新", OnTriggered: a.onInstall},
+				Action{Text: "取消假入库", OnTriggered: a.onUninstall},
 			},
 		},
 
@@ -129,10 +129,10 @@ func openNativeGUI(c *cli) error {
 						ContextMenuItems: []MenuItem{
 							Action{Text: "直接启动", OnTriggered: func() { a.launch("direct") }},
 							Action{Text: "经官方启动器", OnTriggered: func() { a.launch("launcher") }},
-							Action{Text: "经 Steam 启动", OnTriggered: func() { a.launch("steam") }},
+							Action{Text: "经 Steam 启动国服", OnTriggered: func() { a.launch("steam") }},
 							Separator{},
-							Action{Text: "加入 Steam 库", OnTriggered: a.onAdd},
-							Action{Text: "移除", OnTriggered: a.onRemove},
+							Action{Text: "一键假入库 / 刷新", OnTriggered: a.onInstall},
+							Action{Text: "取消假入库", OnTriggered: a.onUninstall},
 							Separator{},
 							Action{Text: "编辑路径/参数", OnTriggered: a.onEdit},
 						},
@@ -144,9 +144,7 @@ func openNativeGUI(c *cli) error {
 						Children: []Widget{
 							TextLabel{AssignTo: &a.detailLbl, Text: "", MinSize: Size{Width: 260}},
 							VSpacer{},
-							PushButton{Text: "启动国服（经 Steam 库）", OnClicked: a.onLaunchSteamApp},
-							PushButton{Text: "一键假入库 / 刷新", OnClicked: a.onInstall},
-							PushButton{Text: "取消假入库", OnClicked: a.onUninstall},
+							PushButton{Text: "启动国服（经 Steam）", OnClicked: a.onLaunchSteamApp},
 							PushButton{Text: "编辑路径/参数", OnClicked: a.onEdit},
 							PushButton{Text: "设置", OnClicked: a.onSettings},
 							PushButton{Text: "重新扫描", OnClicked: a.onRescan},
@@ -318,36 +316,7 @@ func (a *guiApp) appIDOf(id string) string {
 
 // onLaunchSteamApp 通过 Steam 库启动国服（steam://rungameid/<appid>，需已假入库）。
 func (a *guiApp) onLaunchSteamApp() {
-	_, spec, ok := a.selected()
-	if !ok {
-		return
-	}
-	if spec.SteamAppID == "" {
-		walk.MsgBox(a.mw, "无法启动", "该游戏无对应 Steam 版本（未提供 appid），无法经 Steam 库启动。\n可改用「直接启动」或「经 Steam（快捷方式）」。", walk.MsgBoxIconWarning)
-		return
-	}
-	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
-	if err != nil {
-		a.err("启动失败", err)
-		return
-	}
-	if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
-		if walk.MsgBox(a.mw, "尚未假入库",
-			"该游戏尚未在 Steam 库中显示为已安装。\n是否现在「假入库」？",
-			walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
-			return
-		}
-		a.onInstall()
-		if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
-			return
-		}
-	}
-	uri := "steam://rungameid/" + spec.SteamAppID
-	if err := launch.OpenURI(uri); err != nil {
-		a.err("启动失败", err)
-		return
-	}
-	a.setStatus("已通过 Steam 库启动：" + spec.Name)
+	a.launch("steam")
 }
 
 // onInstall 假入库：让游戏在 Steam 库中显示为已安装。
@@ -500,76 +469,40 @@ func (a *guiApp) launch(mode string) {
 		}
 		a.setStatus("已通过官方启动器启动：" + spec.Name)
 	case "steam":
-		appID, err := ensureShortcut(a.cfg, &cli{}, spec)
-		if err != nil {
+		if err := a.launchSteamApp(spec); err != nil {
 			a.err("经 Steam 启动失败", err)
-			return
 		}
-		if err := launch.OpenURI(steam.LaunchURI(appID)); err != nil {
-			a.err("打开 Steam 失败", err)
-			return
-		}
-		a.setStatus("已通过 Steam 启动：" + spec.Name)
 	}
 }
 
-func (a *guiApp) onAdd() {
-	_, spec, ok := a.selected()
-	if !ok {
-		return
+// launchSteamApp 确保已假入库（让 Steam 以为已下载），再用 steam://rungameid/<appid> 拉起国服。
+func (a *guiApp) launchSteamApp(spec *gameSpec) error {
+	if spec.SteamAppID == "" {
+		return fmt.Errorf("该游戏无对应 Steam 版本（未提供 appid），无法经 Steam 启动")
 	}
-	force := false
-	if steam.IsSteamRunning() {
-		if walk.MsgBox(a.mw, "Steam 正在运行",
-			"Steam 正在运行，直接写入会在退出时被覆盖。\n是否强制写入？",
-			walk.MsgBoxYesNo|walk.MsgBoxIconWarning) != walk.DlgCmdYes {
-			return
+	sp, err := steam.FindSteamPath(a.cfg.Steam.Path)
+	if err != nil {
+		return err
+	}
+	installdir := steamInstallDirOf(spec)
+	if !steam.IsFakeInstalled(sp, spec.SteamAppID) {
+		if steam.IsSteamRunning() {
+			return fmt.Errorf("尚未假入库且 Steam 正在运行。请先退出 Steam，或点「一键假入库 / 刷新」")
 		}
-		force = true
-	}
-	appID, err := ensureShortcut(a.cfg, &cli{force: force}, spec)
-	if err != nil {
-		a.err("加入 Steam 失败", err)
-		return
-	}
-	msg := fmt.Sprintf("AppId：%d\nURI：%s\n\n请重启 Steam 后在库中找到「%s」。",
-		uint32(appID), steam.LaunchURI(appID), spec.Name)
-	a.setStatus("已加入 Steam 库：" + spec.Name)
-	walk.MsgBox(a.mw, "已加入 Steam 库", msg, walk.MsgBoxIconInformation)
-}
-
-func (a *guiApp) onRemove() {
-	_, spec, ok := a.selected()
-	if !ok {
-		return
-	}
-	if steam.IsSteamRunning() {
-		if walk.MsgBox(a.mw, "Steam 正在运行",
-			"请先完全退出 Steam 再移除，否则可能被覆盖。\n是否仍要尝试移除？",
-			walk.MsgBoxYesNo|walk.MsgBoxIconWarning) != walk.DlgCmdYes {
-			return
+		contentDir := steamContentDir(spec)
+		if _, err := steam.FakeInstall(sp, spec.SteamAppID, spec.Name, installdir, contentDir, steamDepotOf(spec)); err != nil {
+			return fmt.Errorf("自动假入库失败: %w", err)
 		}
+		walk.MsgBox(a.mw, "已自动假入库",
+			"已自动完成假入库。请完全重启 Steam 后，再点「经 Steam 启动国服」。",
+			walk.MsgBoxIconInformation)
+		return nil
 	}
-	steamPath, err := steam.FindSteamPath(a.cfg.Steam.Path)
-	if err != nil {
-		a.err("移除失败", err)
-		return
+	if err := launch.OpenURI(steam.LaunchURI(spec.SteamAppID)); err != nil {
+		return err
 	}
-	ud, err := steam.FindUserDataDir(steamPath, a.cfg.Steam.AccountID)
-	if err != nil {
-		a.err("移除失败", err)
-		return
-	}
-	removed, err := steam.RemoveShortcut(steam.ShortcutsPath(ud), spec.ExePath)
-	if err != nil {
-		a.err("移除失败", err)
-		return
-	}
-	if !removed {
-		a.setStatus("未在 Steam 库中找到该游戏")
-		return
-	}
-	a.setStatus("已从 Steam 库移除：" + spec.Name)
+	a.setStatus("已通过 Steam 启动：" + spec.Name)
+	return nil
 }
 
 func (a *guiApp) onEdit() {
